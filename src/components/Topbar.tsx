@@ -1,47 +1,39 @@
 import React from 'react';
-import { Tab } from '../App';
-import { Facebook, Music, Hexagon, Instagram } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import type { Tab } from '../types';
+import { useApp } from '../state/AppContext';
 
-interface TopbarProps {
-  activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
-}
+const TITLES: Record<Tab, string> = {
+  dashboard: 'Dashboard',
+  brands: 'Brands',
+  campaigns: 'Campaigns',
+  planner: 'Social Planner',
+  analytics: 'Analytics',
+  integrations: 'Integrations',
+  settings: 'Settings',
+};
 
-export function Topbar({ activeTab, onTabChange }: TopbarProps) {
-  const titles: Record<Tab, string> = {
-    generate: 'Content Generator',
-    history: 'Content History',
-    schedule: 'Schedule Queue',
-    platforms: 'Platform Connections',
-    analytics: 'Analytics',
-    leads: 'Lead Scoring',
-    settings: 'Agent Settings'
-  };
+export function Topbar({ activeTab, onNewCampaign }: { activeTab: Tab; onNewCampaign: () => void }) {
+  const { activeBrand } = useApp();
 
   return (
-    <div className="bg-white/80 backdrop-blur-md border-b border-renx-border px-8 h-[64px] flex items-center justify-between flex-shrink-0 z-10 sticky top-0 shadow-sm">
-      <div className="flex items-center gap-4">
-        <div className="font-heading text-[16px] font-black text-renx-navy tracking-tight">
-          {titles[activeTab]}
-        </div>
-        <div className="h-5 w-px bg-renx-border hidden sm:block"></div>
-        <div className="hidden sm:flex items-center gap-2">
-          <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
-          <span className="text-[11px] font-semibold text-renx-gray uppercase tracking-widest">System Online</span>
-        </div>
+    <header className="h-16 shrink-0 flex items-center justify-between px-6 md:px-8 bg-white/60 backdrop-blur-md border-b border-bb-border">
+      <div className="flex items-center gap-3">
+        <h1 className="font-heading font-bold text-lg">{TITLES[activeTab]}</h1>
+        {activeBrand && (
+          <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bb-violet-soft text-bb-primary text-xs font-medium">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: activeBrand.colors[0] ?? '#7C3AED' }} />
+            {activeBrand.name}
+          </span>
+        )}
       </div>
-      
-      <div className="flex items-center gap-2.5">
-        <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-600 border border-blue-100 shadow-sm cursor-pointer hover:bg-blue-100 transition-colors" title="Facebook">
-          <Facebook size={16} />
-        </div>
-        <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-pink-50 text-pink-600 border border-pink-100 shadow-sm cursor-pointer hover:bg-pink-100 transition-colors" title="Instagram">
-          <Instagram size={16} />
-        </div>
-        <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-50 text-gray-800 border border-gray-200 shadow-sm cursor-pointer hover:bg-gray-100 transition-colors" title="TikTok">
-          <Music size={16} />
-        </div>
-      </div>
-    </div>
+      <button
+        onClick={onNewCampaign}
+        className="bb-gradient text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity flex items-center gap-2 shadow-md shadow-violet-300/50"
+      >
+        <Sparkles size={15} />
+        New Campaign
+      </button>
+    </header>
   );
 }

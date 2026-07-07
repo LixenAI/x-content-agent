@@ -9,8 +9,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Allow customized domains
-  app.use(cors({ origin: [/rennxai-agent\.live$/, /localhost/] }));
+  app.use(cors());
   app.use(express.json());
 
   // API Route for Gemini Text
@@ -43,6 +42,108 @@ async function startServer() {
         } catch(e) {}
       }
       res.status(500).json({ error: `Gemini API Error: ${errorMsg}` });
+    }
+  });
+
+  // API Route for Website Brand Analysis
+  app.post("/api/analyze-website", async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+        return res.status(401).json({ error: "Your Gemini API key is set to 'MY_GEMINI_API_KEY'. Please open Settings (gear icon) -> Secrets, and DELETE the GEMINI_API_KEY to use the free key, or replace it with a valid key." });
+      }
+
+      const { url } = req.body;
+      if (!url || typeof url !== 'string') return res.status(400).json({ error: "URL is required." });
+
+      let target: URL;
+      try {
+        target = new URL(url.startsWith('http') ? url : `https://${url}`);
+        if (!['http:', 'https:'].includes(target.protocol)) throw new Error('bad protocol');
+      } catch {
+        return res.status(400).json({ error: "Please enter a valid website URL." });
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      let html = '';
+      try {
+        const siteRes = await fetch(target.toString(), {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+          },
+        });
+        if (!siteRes.ok) {
+          return res.status(502).json({ error: `Could not load the website (HTTP ${siteRes.status}).` });
+        }
+        html = await siteRes.text();
+      } catch {
+        return res.status(502).json({ error: "Could not reach that website. Check the URL and try again." });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)
+        || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i);
+      const bodyText = html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#\d+;|&\w+;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 8000);
+
+      const siteSummary = [
+        `URL: ${target.toString()}`,
+        titleMatch ? `Page title: ${titleMatch[1].trim()}` : '',
+        descMatch ? `Meta description: ${descMatch[1].trim()}` : '',
+        `Page text: ${bodyText}`,
+      ].filter(Boolean).join('\n');
+
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey });
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Analyze this website content and extract a brand profile for social media marketing.
+
+${siteSummary}
+
+Return a JSON object with exactly these fields:
+- "name": the brand/company name
+- "description": 1-2 sentence summary of what they do and their value proposition
+- "toneOfVoice": how the brand speaks (e.g. "playful and bold", "professional and reassuring")
+- "audience": who their target customers are
+- "topics": array of 5-6 short content pillar topics for social posts
+- "colors": array of 2-3 hex color codes matching the brand's likely palette (infer from industry/vibe if unknown)`,
+        config: { responseMimeType: "application/json" },
+      });
+
+      let jsonText = (response.text || '').trim();
+      if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      }
+      const brand = JSON.parse(jsonText);
+      res.json({ brand });
+    } catch (err: any) {
+      console.error("Analyze Website Error:", err);
+      let errorMsg = err.message || 'Failed to analyze website';
+      if (errorMsg.includes('{"error":')) {
+        try {
+          const parsed = JSON.parse(errorMsg.substring(errorMsg.indexOf('{')));
+          errorMsg = parsed.error?.message || errorMsg;
+        } catch(e) {}
+      }
+      res.status(500).json({ error: `Website analysis failed: ${errorMsg}` });
     }
   });
 
