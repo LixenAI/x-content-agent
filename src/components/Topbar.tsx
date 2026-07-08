@@ -29,7 +29,7 @@ export function Topbar({ activeTab, onNewCampaign }: { activeTab: Tab; onNewCamp
       </div>
       <button
         onClick={onNewCampaign}
-        className="bb-gradient text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity flex items-center gap-2 shadow-md shadow-violet-300/50"
+        className="bb-gradient text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity flex items-center gap-2 shadow-md shadow-sky-300/50"
       >
         <Sparkles size={15} />
         New Campaign

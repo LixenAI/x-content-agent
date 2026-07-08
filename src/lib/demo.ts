@@ -14,7 +14,7 @@ export function demoBrandProfile(url: string): BrandProfileDraft {
     toneOfVoice: 'Friendly, confident, and helpful — speaks like a smart friend, not a corporation.',
     audience: 'Small business owners and marketing teams looking to grow online.',
     topics: ['Behind the scenes', 'Customer wins', 'Tips & how-tos', 'Product highlights', 'Industry trends'],
-    colors: ['#7C3AED', '#4F46E5', '#F59E0B'],
+    colors: ['#1A6FD4', '#0C2D5A', '#C0392B'],
   };
 }
 
@@ -184,7 +184,7 @@ export function demoVariants(post: Post): CaptionVariant[] {
 }
 
 export function animatedVideoPlaceholder(brand: Brand, seed: number): string {
-  const colors = brand.colors.length >= 2 ? brand.colors : ['#7C3AED', '#4F46E5'];
+  const colors = brand.colors.length >= 2 ? brand.colors : ['#1A6FD4', '#0C2D5A'];
   const c1 = colors[seed % colors.length];
   const c2 = colors[(seed + 1) % colors.length];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">` +
@@ -199,7 +199,7 @@ export function animatedVideoPlaceholder(brand: Brand, seed: number): string {
 }
 
 export function placeholderImage(brand: Brand, seed: number): string {
-  const colors = brand.colors.length >= 2 ? brand.colors : ['#7C3AED', '#4F46E5'];
+  const colors = brand.colors.length >= 2 ? brand.colors : ['#1A6FD4', '#0C2D5A'];
   const c1 = colors[seed % colors.length];
   const c2 = colors[(seed + 1) % colors.length];
   const initial = (brand.name.charAt(0) || 'B').toUpperCase();

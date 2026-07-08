@@ -13,7 +13,7 @@ import { PLATFORM_MATRIX, resolveVideoStyle, VIDEO_STYLES } from '../lib/framewo
 
 const DEFAULT_SETTINGS: AgencySettings = {
   agencyName: 'Content Pro Agent',
-  accentColor: '#7C3AED',
+  accentColor: '#1A6FD4',
   logoText: 'CP',
   customDomain: '',
 };
@@ -191,34 +191,78 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const postsRef = useRef<Post[]>([]);
   postsRef.current = posts;
 
-  // Hydrate from localStorage (seed on first run)
+  // Hydrate from server. Warm cache paints instantly; the real /api/state
+  // response replaces it. Empty DB → seed locally and push everything up.
   useEffect(() => {
-    let loadedBrands = store.loadBrands();
-    let loadedCampaigns = store.loadCampaigns();
-    let loadedPosts = store.loadPosts();
-    if (loadedBrands.length === 0) {
-      const seed = seedData();
-      loadedBrands = seed.brands;
-      loadedCampaigns = seed.campaigns;
-      loadedPosts = seed.posts;
+    const cache = store.loadCachedSnapshot();
+    if (cache && cache.brands.length > 0) {
+      setBrands(cache.brands); setCampaigns(cache.campaigns); setPosts(cache.posts);
+      setActiveBrandIdState(cache.activeBrandId);
+      if (cache.settings) setSettings(cache.settings);
+      setIntegrations(cache.integrations);
     }
-    setBrands(loadedBrands);
-    setCampaigns(loadedCampaigns);
-    setPosts(loadedPosts);
-    setActiveBrandIdState(store.loadActiveBrand() ?? loadedBrands[0]?.id ?? null);
-    setSettings(store.loadSettings(DEFAULT_SETTINGS));
-    setIntegrations(store.loadIntegrations());
-    setHydrated(true);
-    api.getProviders().then(setProviderStatus).catch(() => setProviderStatus(DEFAULT_PROVIDERS));
+    (async () => {
+      try {
+        const snap = await store.loadState();
+        if (snap.brands.length === 0) {
+          const seed = seedData();
+          await Promise.all(seed.brands.map(b => store.saveBrand(b)));
+          await Promise.all(seed.campaigns.map(c => store.saveCampaign(c)));
+          await Promise.all(seed.posts.map(p => store.savePost(p)));
+          setBrands(seed.brands); setCampaigns(seed.campaigns); setPosts(seed.posts);
+          setActiveBrandIdState(seed.brands[0].id);
+          await store.saveKV('active_brand', seed.brands[0].id);
+        } else {
+          setBrands(snap.brands); setCampaigns(snap.campaigns); setPosts(snap.posts);
+          setActiveBrandIdState(snap.activeBrandId ?? snap.brands[0]?.id ?? null);
+          if (snap.settings) setSettings(snap.settings);
+          setIntegrations(snap.integrations);
+        }
+        setHydrated(true);
+      } catch (err) {
+        console.warn('Server unavailable, running in offline mode:', err);
+        const seed = seedData();
+        setBrands(seed.brands); setCampaigns(seed.campaigns); setPosts(seed.posts);
+        setActiveBrandIdState(seed.brands[0].id);
+        setHydrated(true);
+        showToast('Offline — changes will not be saved');
+      }
+      api.getProviders().then(setProviderStatus).catch(() => setProviderStatus(DEFAULT_PROVIDERS));
+    })();
   }, []);
 
-  // Write-through persistence
-  useEffect(() => { if (hydrated) store.saveBrands(brands); }, [brands, hydrated]);
-  useEffect(() => { if (hydrated) store.saveCampaigns(campaigns); }, [campaigns, hydrated]);
-  useEffect(() => { if (hydrated) store.savePosts(posts); }, [posts, hydrated]);
-  useEffect(() => { if (hydrated) store.saveActiveBrand(activeBrandId); }, [activeBrandId, hydrated]);
-  useEffect(() => { if (hydrated) store.saveSettings(settings); }, [settings, hydrated]);
-  useEffect(() => { if (hydrated) store.saveIntegrations(integrations); }, [integrations, hydrated]);
+  // Write-through persistence: diff each collection against the previous
+  // snapshot and PUT changed / DELETE removed. Reference-equality is enough
+  // because every mutation returns a new object.
+  const prevBrands = useRef<Brand[]>([]);
+  const prevCampaigns = useRef<Campaign[]>([]);
+  const prevPosts = useRef<Post[]>([]);
+  useEffect(() => {
+    if (!hydrated) { prevBrands.current = brands; return; }
+    const prevMap = new Map(prevBrands.current.map(x => [x.id, x]));
+    for (const b of brands) if (prevMap.get(b.id) !== b) store.saveBrand(b).catch(e => console.warn(e));
+    for (const old of prevBrands.current) if (!brands.find(x => x.id === old.id)) store.deleteBrand(old.id).catch(e => console.warn(e));
+    prevBrands.current = brands;
+  }, [brands, hydrated]);
+  useEffect(() => {
+    if (!hydrated) { prevCampaigns.current = campaigns; return; }
+    const prevMap = new Map(prevCampaigns.current.map(x => [x.id, x]));
+    for (const c of campaigns) if (prevMap.get(c.id) !== c) store.saveCampaign(c).catch(e => console.warn(e));
+    for (const old of prevCampaigns.current) if (!campaigns.find(x => x.id === old.id)) store.deleteCampaign(old.id).catch(e => console.warn(e));
+    prevCampaigns.current = campaigns;
+  }, [campaigns, hydrated]);
+  useEffect(() => {
+    if (!hydrated) { prevPosts.current = posts; return; }
+    const prevMap = new Map(prevPosts.current.map(x => [x.id, x]));
+    for (const p of posts) if (prevMap.get(p.id) !== p) store.savePost(p).catch(e => console.warn(e));
+    for (const old of prevPosts.current) if (!posts.find(x => x.id === old.id)) store.deletePost(old.id).catch(e => console.warn(e));
+    prevPosts.current = posts;
+    // Keep the warm cache fresh (no images — sessionStorage quota).
+    store.cacheSnapshot({ brands, campaigns, posts, activeBrandId, settings, integrations });
+  }, [posts, brands, campaigns, activeBrandId, settings, integrations, hydrated]);
+  useEffect(() => { if (hydrated) store.saveKV('active_brand', activeBrandId).catch(e => console.warn(e)); }, [activeBrandId, hydrated]);
+  useEffect(() => { if (hydrated) store.saveKV('settings', settings).catch(e => console.warn(e)); }, [settings, hydrated]);
+  useEffect(() => { if (hydrated) store.saveKV('integrations', integrations).catch(e => console.warn(e)); }, [integrations, hydrated]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -489,8 +533,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSettings(prev => ({ ...prev, ...patch }));
   }, []);
 
-  const resetData = useCallback(() => {
-    store.resetAll();
+  const resetData = useCallback(async () => {
+    // Wipe collection-diff baselines so the reseeded rows are treated as new.
+    prevBrands.current = []; prevCampaigns.current = []; prevPosts.current = [];
+    try { await store.resetAll(); } catch (err) { console.warn('Reset failed:', err); }
     const seed = seedData();
     setBrands(seed.brands);
     setCampaigns(seed.campaigns);

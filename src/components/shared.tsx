@@ -28,7 +28,7 @@ export function PlatformIcon({ platform, size = 16, className = '' }: { platform
 
 const STATUS_STYLES: Record<PostStatus, string> = {
   draft: 'bg-amber-100 text-amber-700',
-  scheduled: 'bg-violet-100 text-violet-700',
+  scheduled: 'bg-sky-100 text-sky-800',
   posted: 'bg-emerald-100 text-emerald-700',
 };
 

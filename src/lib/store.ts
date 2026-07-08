@@ -1,123 +1,76 @@
-import type { Brand, Campaign, Post, AgencySettings, IntegrationId } from '../types';
+// Server-first persistence via /api/state and per-record PUT/DELETE endpoints.
+// A small sessionStorage warm cache keeps first paint instant while the
+// initial /api/state call resolves.
+import type { AgencySettings, Brand, Campaign, IntegrationId, Post } from '../types';
 
-const KEYS = {
-  brands: 'bb_brands',
-  campaigns: 'bb_campaigns',
-  postsMeta: 'bb_posts_meta',
-  images: 'bb_images',
-  activeBrand: 'bb_active_brand',
-  settings: 'bb_settings',
-  integrations: 'bb_integrations',
-} as const;
+const CACHE_KEY = 'cpa_snapshot_cache';
+
+export interface AppSnapshot {
+  brands: Brand[];
+  campaigns: Campaign[];
+  posts: Post[];
+  activeBrandId: string | null;
+  settings: AgencySettings | null;
+  integrations: IntegrationId[];
+}
 
 export function uid(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function load<T>(key: string, fallback: T): T {
+async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
+  if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+export async function loadState(): Promise<AppSnapshot> {
+  return jsonFetch<AppSnapshot>('/api/state');
+}
+
+export function loadCachedSnapshot(): AppSnapshot | null {
   try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    return raw ? (JSON.parse(raw) as AppSnapshot) : null;
+  } catch { return null; }
 }
 
-function save(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (err) {
-    console.warn(`Failed to persist ${key}`, err);
-  }
+export function cacheSnapshot(snapshot: AppSnapshot) {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(snapshot)); } catch { /* ignore quota */ }
 }
 
-export const loadBrands = () => load<Brand[]>(KEYS.brands, []);
-export const saveBrands = (brands: Brand[]) => save(KEYS.brands, brands);
-
-export const loadCampaigns = () => load<Campaign[]>(KEYS.campaigns, []);
-export const saveCampaigns = (campaigns: Campaign[]) => save(KEYS.campaigns, campaigns);
-
-export const loadActiveBrand = () => load<string | null>(KEYS.activeBrand, null);
-export const saveActiveBrand = (id: string | null) => save(KEYS.activeBrand, id);
-
-export const loadSettings = (fallback: AgencySettings) => load<AgencySettings>(KEYS.settings, fallback);
-export const saveSettings = (settings: AgencySettings) => save(KEYS.settings, settings);
-
-export const loadIntegrations = () => load<IntegrationId[]>(KEYS.integrations, []);
-export const saveIntegrations = (ids: IntegrationId[]) => save(KEYS.integrations, ids);
-
-// Posts are stored as metadata (small) + a media map (large, evictable) so a
-// localStorage quota failure only costs media, never the posts themselves.
-// Media map keys: `{id}` post image, `{id}:s{i}` slide i, `{id}:kf` video
-// keyframe, `{id}:v` video (data URLs only — remote/proxy URLs stay in meta).
-type ImageMap = Record<string, string>;
-
-// Tiny inline SVG placeholders stay in metadata; every other data URL
-// (Gemini/Pollinations images, keyframes) moves to the evictable map.
-const isHeavy = (url: string | null | undefined): url is string =>
-  !!url && url.startsWith('data:') && !url.startsWith('data:image/svg');
-
-export function loadPosts(): Post[] {
-  const meta = load<Post[]>(KEYS.postsMeta, []);
-  const images = load<ImageMap>(KEYS.images, {});
-  return meta.map(p => ({
-    ...p,
-    format: p.format ?? 'post', // migrate pre-format posts
-    imageUrl: images[p.id] ?? p.imageUrl ?? null,
-    slides: p.slides?.map((s, i) => ({ ...s, imageUrl: images[`${p.id}:s${i}`] ?? s.imageUrl ?? null })),
-    video: p.video
-      ? {
-          ...p.video,
-          keyframeUrl: images[`${p.id}:kf`] ?? p.video.keyframeUrl ?? null,
-          videoUrl: images[`${p.id}:v`] ?? p.video.videoUrl ?? null,
-        }
-      : undefined,
-  }));
-}
-
-export function savePosts(posts: Post[]) {
-  const images: ImageMap = {};
-  const meta = posts.map(p => {
-    if (isHeavy(p.imageUrl)) images[p.id] = p.imageUrl;
-    p.slides?.forEach((s, i) => { if (isHeavy(s.imageUrl)) images[`${p.id}:s${i}`] = s.imageUrl; });
-    if (p.video) {
-      if (isHeavy(p.video.keyframeUrl)) images[`${p.id}:kf`] = p.video.keyframeUrl;
-      if (isHeavy(p.video.videoUrl)) images[`${p.id}:v`] = p.video.videoUrl;
-    }
-    return {
-      ...p,
-      imageUrl: isHeavy(p.imageUrl) ? null : p.imageUrl,
-      slides: p.slides?.map(s => ({ ...s, imageUrl: isHeavy(s.imageUrl) ? null : s.imageUrl })),
-      video: p.video
-        ? {
-            ...p.video,
-            keyframeUrl: isHeavy(p.video.keyframeUrl) ? null : p.video.keyframeUrl,
-            videoUrl: isHeavy(p.video.videoUrl) ? null : p.video.videoUrl,
-          }
-        : undefined,
-    };
+const put = <T>(path: string, body: unknown) =>
+  jsonFetch<T>(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
-  save(KEYS.postsMeta, meta);
-  saveImagesWithEviction(images, posts);
-}
+const del = (path: string) => jsonFetch<{ ok: true }>(path, { method: 'DELETE' });
 
-function saveImagesWithEviction(images: ImageMap, posts: Post[]) {
-  // Oldest posts' media gets evicted first when we run out of quota.
-  const order = [...posts].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(p => p.id);
-  const working = { ...images };
-  const keysFor = (id: string) => Object.keys(working).filter(k => k === id || k.startsWith(`${id}:`));
-  for (let attempt = 0; attempt <= order.length; attempt++) {
-    try {
-      localStorage.setItem(KEYS.images, JSON.stringify(working));
-      return;
-    } catch {
-      const victim = order.find(id => keysFor(id).length > 0);
-      if (!victim) return;
-      keysFor(victim).forEach(k => delete working[k]);
-    }
-  }
-}
+export const saveBrand = (brand: Brand) => put(`/api/brands/${brand.id}`, brand);
+export const deleteBrand = (id: string) => del(`/api/brands/${id}`);
+export const saveCampaign = (campaign: Campaign) => put(`/api/campaigns/${campaign.id}`, campaign);
+export const deleteCampaign = (id: string) => del(`/api/campaigns/${id}`);
+export const savePost = (post: Post) => put(`/api/posts/${post.id}`, post);
+export const deletePost = (id: string) => del(`/api/posts/${id}`);
+export const saveKV = (key: string, value: unknown) => put(`/api/kv/${key}`, { value });
+export const resetAll = () => jsonFetch('/api/reset', { method: 'POST' });
 
-export function resetAll() {
-  Object.values(KEYS).forEach(key => localStorage.removeItem(key));
+// Coalesce rapid writes to the same record (e.g. caption typing) into one
+// network request per key. Last write wins.
+export function debouncedPerKey<T>(fn: (arg: T) => Promise<unknown>, keyFn: (arg: T) => string, ms = 400) {
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const latest = new Map<string, T>();
+  return (arg: T) => {
+    const key = keyFn(arg);
+    latest.set(key, arg);
+    const existing = timers.get(key);
+    if (existing) clearTimeout(existing);
+    timers.set(key, setTimeout(() => {
+      const value = latest.get(key)!;
+      latest.delete(key);
+      timers.delete(key);
+      fn(value).catch(err => console.warn(`Save failed for ${key}:`, err));
+    }, ms));
+  };
 }

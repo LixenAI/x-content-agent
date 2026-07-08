@@ -3,6 +3,7 @@ import path from "path";
 import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "node:crypto";
+import { attachMedia, db, splitMedia } from "./src/db";
 
 dotenv.config();
 
@@ -555,6 +556,119 @@ Return a JSON object with exactly these fields:
       res.status(500).json({ error: errorMsg });
     }
   });
+
+  // ================ Persistence (SQLite) ================
+  // JSON blobs per record; media data URLs split into a separate table so
+  // reads stay cheap and one big generated image doesn't bloat the parent row.
+
+  app.get("/api/state", (_req, res) => {
+    try {
+      const d = db();
+      const brands = d.prepare("SELECT data FROM brands ORDER BY created_at ASC").all().map((r: any) => JSON.parse(r.data));
+      const campaigns = d.prepare("SELECT data FROM campaigns ORDER BY created_at ASC").all().map((r: any) => JSON.parse(r.data));
+      const rawPosts = d.prepare("SELECT data FROM posts ORDER BY created_at ASC").all().map((r: any) => JSON.parse(r.data));
+      const mediaRows = d.prepare("SELECT key, data_url FROM media").all() as { key: string; data_url: string }[];
+      const mediaByKey = new Map(mediaRows.map(r => [r.key, r.data_url]));
+      const posts = rawPosts.map(p => attachMedia(p, mediaByKey));
+      const kvRows = d.prepare("SELECT key, value FROM kv").all() as { key: string; value: string }[];
+      const kv = Object.fromEntries(kvRows.map(r => [r.key, JSON.parse(r.value)]));
+      res.json({
+        brands, campaigns, posts,
+        activeBrandId: kv.active_brand ?? null,
+        settings: kv.settings ?? null,
+        integrations: kv.integrations ?? [],
+      });
+    } catch (err: any) {
+      console.error("GET /api/state failed:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/brands/:id", (req, res) => {
+    const { id } = req.params;
+    const brand = req.body;
+    if (!brand || brand.id !== id) return res.status(400).json({ error: "id mismatch" });
+    db().prepare("INSERT INTO brands (id, data, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data")
+      .run(id, JSON.stringify(brand), brand.createdAt || new Date().toISOString());
+    res.json({ ok: true });
+  });
+
+  app.delete("/api/brands/:id", (req, res) => {
+    db().prepare("DELETE FROM brands WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.put("/api/campaigns/:id", (req, res) => {
+    const { id } = req.params;
+    const campaign = req.body;
+    if (!campaign || campaign.id !== id) return res.status(400).json({ error: "id mismatch" });
+    db().prepare("INSERT INTO campaigns (id, brand_id, data, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data")
+      .run(id, campaign.brandId, JSON.stringify(campaign), campaign.createdAt || new Date().toISOString());
+    res.json({ ok: true });
+  });
+
+  app.delete("/api/campaigns/:id", (req, res) => {
+    const d = db();
+    const tx = d.transaction((id: string) => {
+      d.prepare("DELETE FROM posts WHERE campaign_id = ?").run(id);
+      d.prepare("DELETE FROM campaigns WHERE id = ?").run(id);
+    });
+    tx(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.put("/api/posts/:id", (req, res) => {
+    const { id } = req.params;
+    const post = req.body;
+    if (!post || post.id !== id) return res.status(400).json({ error: "id mismatch" });
+    const { media, strippedPost } = splitMedia(post);
+    const d = db();
+    const tx = d.transaction(() => {
+      d.prepare("INSERT INTO posts (id, brand_id, campaign_id, data, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, brand_id = excluded.brand_id, campaign_id = excluded.campaign_id")
+        .run(id, post.brandId, post.campaignId ?? null, JSON.stringify(strippedPost), post.createdAt || new Date().toISOString());
+      d.prepare("DELETE FROM media WHERE post_id = ?").run(id);
+      const insertMedia = d.prepare("INSERT INTO media (key, post_id, data_url, created_at) VALUES (?, ?, ?, ?)");
+      const now = new Date().toISOString();
+      for (const m of media) insertMedia.run(m.key, id, m.url, now);
+    });
+    try {
+      tx();
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("PUT /api/posts failed:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/posts/:id", (req, res) => {
+    db().prepare("DELETE FROM posts WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.put("/api/kv/:key", (req, res) => {
+    const { key } = req.params;
+    if (!/^[a-z_]+$/.test(key)) return res.status(400).json({ error: "invalid key" });
+    db().prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .run(key, JSON.stringify(req.body?.value ?? null));
+    res.json({ ok: true });
+  });
+
+  app.post("/api/reset", (_req, res) => {
+    const d = db();
+    const tx = d.transaction(() => {
+      d.prepare("DELETE FROM media").run();
+      d.prepare("DELETE FROM posts").run();
+      d.prepare("DELETE FROM campaigns").run();
+      d.prepare("DELETE FROM brands").run();
+      d.prepare("DELETE FROM kv").run();
+    });
+    tx();
+    res.json({ ok: true });
+  });
+
+  // Warm the connection so first request is snappy
+  db();
+
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({

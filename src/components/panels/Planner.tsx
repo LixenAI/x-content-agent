@@ -6,7 +6,7 @@ import { EmptyState, FormatBadge, FormatIcon, PlatformIcon, StatusBadge } from '
 
 const STATUS_CHIP: Record<PostStatus, string> = {
   draft: 'bg-amber-100 text-amber-800 border-amber-200',
-  scheduled: 'bg-violet-100 text-violet-800 border-violet-200',
+  scheduled: 'bg-sky-100 text-sky-800 border-sky-200',
   posted: 'bg-emerald-100 text-emerald-800 border-emerald-200',
 };
 

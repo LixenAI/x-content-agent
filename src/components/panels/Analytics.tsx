@@ -52,7 +52,7 @@ export function Analytics() {
               return (
                 <g key={w.label}>
                   <rect x={x} y={180 - reachH} width={barW * 0.55} height={reachH} rx={4} fill="#7C3AED" opacity={0.85} />
-                  <rect x={x + barW * 0.62} y={180 - engH} width={barW * 0.38} height={engH} rx={4} fill="#C4B5FD" />
+                  <rect x={x + barW * 0.62} y={180 - engH} width={barW * 0.38} height={engH} rx={4} fill="#7A9BBF" />
                   <text x={x + barW / 2} y={200} textAnchor="middle" fontSize={12} fill="#6B7280">{w.label}</text>
                 </g>
               );
@@ -60,7 +60,7 @@ export function Analytics() {
           </svg>
           <div className="flex items-center gap-4 text-xs text-bb-muted mt-1">
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-bb-primary" /> Reach</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-violet-300" /> Engagement</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: '#7A9BBF' }} /> Engagement</span>
           </div>
         </div>
 
