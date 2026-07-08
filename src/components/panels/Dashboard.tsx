@@ -78,6 +78,12 @@ export function Dashboard({ onNavigate, onOpenPost }: { onNavigate: (tab: Tab) =
                     <div className="text-sm truncate">{p.caption}</div>
                     <div className="text-xs text-bb-muted flex items-center gap-1.5 mt-0.5">
                       <PlatformIcon platform={p.platform} size={11} />
+                      {(() => {
+                        const brand = brands.find(b => b.id === p.brandId);
+                        const account = (brand?.socialAccounts ?? []).find(a => a.platform === p.platform);
+                        return account ? <span className="text-bb-primary/80">{account.handle}</span> : null;
+                      })()}
+                      <span>·</span>
                       {new Date(p.scheduledAt).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                     </div>
                   </div>
@@ -110,7 +116,16 @@ export function Dashboard({ onNavigate, onOpenPost }: { onNavigate: (tab: Tab) =
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{b.name}</div>
-                    <div className="text-xs text-bb-muted">{count} posts · {approved} approved</div>
+                    <div className="text-xs text-bb-muted flex items-center gap-1.5">
+                      <span>{count} posts · {approved} approved</span>
+                      {(b.socialAccounts ?? []).length > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          {Array.from(new Set((b.socialAccounts ?? []).map(a => a.platform))).slice(0, 4).map(pl => (
+                            <span key={pl}><PlatformIcon platform={pl} size={10} /></span>
+                          ))}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <CheckCircle2 size={15} className={approved === count && count > 0 ? 'text-bb-success' : 'text-bb-border'} />
                 </button>

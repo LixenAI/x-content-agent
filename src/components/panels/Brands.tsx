@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Building2, Globe, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import type { Brand, BrandProfileDraft } from '../../types';
 import { useApp } from '../../state/AppContext';
-import { EmptyState, Modal, PrimaryButton } from '../shared';
+import { EmptyState, Modal, PlatformIcon, PrimaryButton } from '../shared';
 
 const ANALYZE_STAGES = [
   'Reading website…',
@@ -264,6 +264,17 @@ export function Brands() {
                   {b.topics.slice(0, 4).map(t => (
                     <span key={t} className="px-2 py-0.5 rounded-full bg-bb-violet-soft text-bb-primary text-[11px] font-medium">{t}</span>
                   ))}
+                </div>
+                <div className="mt-3 flex items-center gap-1.5">
+                  {(b.socialAccounts ?? []).length > 0 ? (
+                    Array.from(new Set((b.socialAccounts ?? []).map(a => a.platform))).map(p => (
+                      <span key={p} className="w-6 h-6 rounded-md bg-bb-violet-soft text-bb-primary flex items-center justify-center" title={p}>
+                        <PlatformIcon platform={p} size={12} />
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[11px] text-bb-muted italic">No accounts connected</span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-bb-border">
                   <div className="text-xs text-bb-muted">

@@ -25,7 +25,14 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function loadState(): Promise<AppSnapshot> {
-  return jsonFetch<AppSnapshot>('/api/state');
+  const snap = await jsonFetch<AppSnapshot>('/api/state');
+  // Migrate brands persisted before per-brand social accounts existed.
+  snap.brands = snap.brands.map(b => ({
+    ...b,
+    socialAccounts: b.socialAccounts ?? [],
+    ghlSubAccounts: b.ghlSubAccounts ?? [],
+  }));
+  return snap;
 }
 
 export function loadCachedSnapshot(): AppSnapshot | null {

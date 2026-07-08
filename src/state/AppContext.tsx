@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type {
   AgencySettings, AspectRatio, Brand, BrandProfileDraft, Campaign, CaptionVariant,
-  FormatMix, IntegrationId, Platform, Post, ProviderStatus,
+  FormatMix, GhlSubAccount, IntegrationId, Platform, Post, ProviderStatus, SocialAccount,
 } from '../types';
 import * as store from '../lib/store';
 import * as api from '../lib/api';
@@ -75,6 +75,10 @@ interface AppContextValue {
   fetchVariants: (postId: string) => Promise<CaptionVariant[]>;
   rewriteCaption: (postId: string) => Promise<void>;
   toggleIntegration: (id: IntegrationId) => void;
+  connectSocialAccount: (brandId: string, platform: Platform, handle: string, displayName?: string) => void;
+  disconnectSocialAccount: (brandId: string, accountId: string) => void;
+  connectGhlSubAccount: (brandId: string, subAccountId: string, displayName?: string) => void;
+  disconnectGhlSubAccount: (brandId: string, accountId: string) => void;
   updateSettings: (patch: Partial<AgencySettings>) => void;
   resetData: () => void;
 }
@@ -149,6 +153,11 @@ function seedData(): { brands: Brand[]; campaigns: Campaign[]; posts: Post[] } {
     colors: ['#7C5A3C', '#D4A574', '#2D5016'],
     deepKnowledge: '',
     createdAt: now.toISOString(),
+    socialAccounts: [
+      { id: store.uid(), platform: 'instagram', handle: '@bloomcoffee', displayName: 'Bloom Coffee Co.', connectedAt: now.toISOString() },
+      { id: store.uid(), platform: 'facebook', handle: '@bloomcoffeeco', displayName: 'Bloom Coffee Co.', connectedAt: now.toISOString() },
+    ],
+    ghlSubAccounts: [],
   };
   const campaign: Campaign = {
     id: store.uid(),
@@ -290,7 +299,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [enterDemoMode]);
 
   const addBrand = useCallback((draft: BrandProfileDraft & { website: string; deepKnowledge: string }): Brand => {
-    const brand: Brand = { id: store.uid(), createdAt: new Date().toISOString(), ...draft };
+    const brand: Brand = {
+      id: store.uid(),
+      createdAt: new Date().toISOString(),
+      socialAccounts: [],
+      ghlSubAccounts: [],
+      ...draft,
+    };
     setBrands(prev => [...prev, brand]);
     setActiveBrandIdState(brand.id);
     return brand;
@@ -298,6 +313,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateBrand = useCallback((id: string, patch: Partial<Brand>) => {
     setBrands(prev => prev.map(b => (b.id === id ? { ...b, ...patch } : b)));
+  }, []);
+
+  const connectSocialAccount = useCallback((brandId: string, platform: Platform, handle: string, displayName?: string) => {
+    const account: SocialAccount = {
+      id: store.uid(),
+      platform,
+      handle: handle.startsWith('@') ? handle : `@${handle}`,
+      displayName: displayName || handle.replace(/^@/, ''),
+      connectedAt: new Date().toISOString(),
+    };
+    setBrands(prev => prev.map(b => (b.id === brandId
+      ? { ...b, socialAccounts: [...(b.socialAccounts ?? []), account] }
+      : b)));
+  }, []);
+
+  const disconnectSocialAccount = useCallback((brandId: string, accountId: string) => {
+    setBrands(prev => prev.map(b => (b.id === brandId
+      ? { ...b, socialAccounts: (b.socialAccounts ?? []).filter(a => a.id !== accountId) }
+      : b)));
+  }, []);
+
+  const connectGhlSubAccount = useCallback((brandId: string, subAccountId: string, displayName?: string) => {
+    const account: GhlSubAccount = {
+      id: store.uid(),
+      subAccountId,
+      displayName: displayName || subAccountId,
+      connectedAt: new Date().toISOString(),
+    };
+    setBrands(prev => prev.map(b => (b.id === brandId
+      ? { ...b, ghlSubAccounts: [...(b.ghlSubAccounts ?? []), account] }
+      : b)));
+  }, []);
+
+  const disconnectGhlSubAccount = useCallback((brandId: string, accountId: string) => {
+    setBrands(prev => prev.map(b => (b.id === brandId
+      ? { ...b, ghlSubAccounts: (b.ghlSubAccounts ?? []).filter(a => a.id !== accountId) }
+      : b)));
   }, []);
 
   const deleteBrand = useCallback((id: string) => {
@@ -555,6 +607,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     generatePostImage, generateSlideImage, generateVideoKeyframe, generatePostVideo,
     predictViralityFor, fetchVariants, rewriteCaption,
     toggleIntegration, updateSettings, resetData,
+    connectSocialAccount, disconnectSocialAccount,
+    connectGhlSubAccount, disconnectGhlSubAccount,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

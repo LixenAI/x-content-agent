@@ -133,21 +133,48 @@ export function CampaignWizard({ onClose, onCreated }: { onClose: () => void; on
           </div>
         </Field>
         <Field label="Platforms">
-          <div className="flex flex-wrap gap-2">
-            {ALL_PLATFORMS.map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => togglePlatform(p)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                  platforms.includes(p) ? 'bg-bb-violet-soft border-bb-primary text-bb-primary' : 'bg-white border-bb-border text-bb-muted hover:border-bb-primary'
-                }`}
-              >
-                <PlatformIcon platform={p} size={15} />
-                {PLATFORM_LABELS[p]}
-              </button>
-            ))}
-          </div>
+          {(() => {
+            const unconnectedSelected = platforms.filter(p => !(activeBrand.socialAccounts ?? []).some(a => a.platform === p));
+            return (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_PLATFORMS.map(p => {
+                    const account = (activeBrand.socialAccounts ?? []).find(a => a.platform === p);
+                    const selected = platforms.includes(p);
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => togglePlatform(p)}
+                        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                          selected ? 'bg-bb-violet-soft border-bb-primary text-bb-primary' : 'bg-white border-bb-border text-bb-muted hover:border-bb-primary'
+                        }`}
+                      >
+                        <span className="relative">
+                          <PlatformIcon platform={p} size={15} />
+                          {account && <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-emerald-500" title="Connected" />}
+                        </span>
+                        <span className="flex flex-col items-start leading-tight">
+                          <span>{PLATFORM_LABELS[p]}</span>
+                          {account
+                            ? <span className={`text-[10px] ${selected ? 'text-bb-primary/80' : 'text-emerald-600'}`}>{account.handle}</span>
+                            : <span className="text-[10px] text-bb-muted/70">not connected</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {unconnectedSelected.length > 0 && (
+                  <div className="mt-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs flex items-start gap-2">
+                    <span>⚠</span>
+                    <span>
+                      {unconnectedSelected.length} selected platform{unconnectedSelected.length !== 1 && 's'} ({unconnectedSelected.map(p => PLATFORM_LABELS[p]).join(', ')}) {unconnectedSelected.length !== 1 ? 'have' : 'has'} no connected account for <strong>{activeBrand.name}</strong>. Content will still generate — connect accounts in Integrations to publish.
+                    </span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </Field>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Posts per week">

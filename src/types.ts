@@ -5,6 +5,21 @@ export type MediaStatus = 'none' | 'generating' | 'done' | 'failed';
 export type AspectRatio = '1:1' | '9:16' | '16:9';
 export type Tab = 'dashboard' | 'brands' | 'campaigns' | 'planner' | 'analytics' | 'integrations' | 'settings';
 
+export interface SocialAccount {
+  id: string;
+  platform: Platform;
+  handle: string;         // e.g. "@bloomcoffee"
+  displayName: string;    // e.g. "Bloom Coffee Co."
+  connectedAt: string;
+}
+
+export interface GhlSubAccount {
+  id: string;
+  subAccountId: string;   // e.g. "abc123XYZ"
+  displayName: string;
+  connectedAt: string;
+}
+
 export interface Brand {
   id: string;
   name: string;
@@ -16,6 +31,8 @@ export interface Brand {
   colors: string[];
   deepKnowledge: string;
   createdAt: string;
+  socialAccounts: SocialAccount[];    // per-brand social connections
+  ghlSubAccounts?: GhlSubAccount[];   // per-brand GoHighLevel sub-accounts
 }
 
 export interface FormatMix {
@@ -102,7 +119,9 @@ export interface AgencySettings {
   customDomain: string;
 }
 
-export type IntegrationId = 'facebook' | 'instagram' | 'tiktok' | 'linkedin' | 'gohighlevel' | 'canva' | 'kling' | 'higgsfield';
+// Agency-wide creative engines only. Social publishing is now scoped per brand
+// via Brand.socialAccounts.
+export type IntegrationId = 'canva' | 'kling' | 'higgsfield';
 
 export interface BrandProfileDraft {
   name: string;

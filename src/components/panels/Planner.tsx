@@ -19,7 +19,7 @@ function sameDay(a: Date, b: Date) {
 }
 
 export function Planner({ onOpenPost }: { onOpenPost: (id: string) => void }) {
-  const { posts, activeBrandId, approveAllDrafts } = useApp();
+  const { posts, activeBrandId, activeBrand, approveAllDrafts } = useApp();
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
   const [statusFilter, setStatusFilter] = useState<PostStatus | 'all'>('all');
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
@@ -172,6 +172,11 @@ export function Planner({ onOpenPost }: { onOpenPost: (id: string) => void }) {
                 <div className="text-sm font-medium truncate">{p.caption}</div>
                 <div className="flex items-center gap-2 mt-1 text-xs text-bb-muted">
                   <PlatformIcon platform={p.platform} size={12} />
+                  {(() => {
+                    const account = (activeBrand?.socialAccounts ?? []).find(a => a.platform === p.platform);
+                    return account ? <span className="text-bb-primary/80">{account.handle}</span> : null;
+                  })()}
+                  <span>·</span>
                   {new Date(p.scheduledAt).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                 </div>
               </div>

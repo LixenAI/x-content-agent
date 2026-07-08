@@ -40,14 +40,20 @@ export function PostEditorModal({ postId, onClose }: { postId: string; onClose: 
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: brand?.colors[0] ?? '#7C3AED' }}>
               {(brand?.name.charAt(0) ?? 'B').toUpperCase()}
             </div>
-            <div className="flex-1">
-              <div className="text-sm font-semibold leading-tight">{brand?.name ?? 'Brand'}</div>
-              <div className="text-[11px] text-bb-muted flex items-center gap-1">
-                <PlatformIcon platform={post.platform} size={11} /> {PLATFORM_LABELS[post.platform]}
-                <span className="text-bb-border">·</span>
-                <FormatIcon format={post.format} size={11} /> {FORMAT_LABELS[post.format]}
-              </div>
-            </div>
+            {(() => {
+              const account = (brand?.socialAccounts ?? []).find(a => a.platform === post.platform);
+              return (
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold leading-tight truncate">{account?.handle ?? brand?.name ?? 'Brand'}</div>
+                  <div className="text-[11px] text-bb-muted flex items-center gap-1">
+                    <PlatformIcon platform={post.platform} size={11} /> {PLATFORM_LABELS[post.platform]}
+                    <span className="text-bb-border">·</span>
+                    <FormatIcon format={post.format} size={11} /> {FORMAT_LABELS[post.format]}
+                    {!account && <span className="ml-1 text-amber-600">· not connected</span>}
+                  </div>
+                </div>
+              );
+            })()}
             <StatusBadge status={post.status} />
           </div>
 
