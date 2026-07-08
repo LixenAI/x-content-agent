@@ -84,11 +84,11 @@ export function Sidebar({ activeTab, onTabChange }: { activeTab: Tab; onTabChang
           className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-heading font-bold text-sm shadow-lg"
           style={{ background: `linear-gradient(135deg, ${settings.accentColor}, #4F46E5)` }}
         >
-          {settings.logoText || 'BB'}
+          {settings.logoText || 'CP'}
         </div>
         <div>
           <div className="font-heading font-bold text-white leading-tight">{settings.agencyName}</div>
-          <div className="text-[10px] text-white/40 tracking-wide">AI Content Engine</div>
+          <div className="text-[10px] text-white/40 tracking-wide">Pro Content Studio</div>
         </div>
       </div>
 

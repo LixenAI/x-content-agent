@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CalendarDays, CheckCheck, ChevronLeft, ChevronRight, LayoutList } from 'lucide-react';
 import type { PostStatus } from '../../types';
 import { useApp } from '../../state/AppContext';
-import { EmptyState, PlatformIcon, StatusBadge } from '../shared';
+import { EmptyState, FormatBadge, FormatIcon, PlatformIcon, StatusBadge } from '../shared';
 
 const STATUS_CHIP: Record<PostStatus, string> = {
   draft: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -142,6 +142,7 @@ export function Planner({ onOpenPost }: { onOpenPost: (id: string) => void }) {
                           className={`w-full flex items-center gap-1 px-1.5 py-1 rounded-md border text-left text-[10px] font-medium truncate hover:opacity-80 transition-opacity ${STATUS_CHIP[p.status]}`}
                         >
                           <PlatformIcon platform={p.platform} size={10} className="shrink-0" />
+                          {p.format !== 'post' && <FormatIcon format={p.format} size={10} className="shrink-0" />}
                           <span className="truncate">{p.caption}</span>
                         </button>
                       ))}
@@ -161,8 +162,11 @@ export function Planner({ onOpenPost }: { onOpenPost: (id: string) => void }) {
               onClick={() => onOpenPost(p.id)}
               className="w-full bb-card bb-card-hover p-3.5 flex items-center gap-4 text-left"
             >
-              <div className="w-14 h-14 rounded-xl overflow-hidden bg-bb-violet-soft shrink-0">
+              <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-bb-violet-soft shrink-0">
                 {p.imageUrl && <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />}
+                {p.format !== 'post' && (
+                  <span className="absolute bottom-0.5 left-0.5"><FormatBadge format={p.format} /></span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{p.caption}</div>

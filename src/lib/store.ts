@@ -46,43 +46,74 @@ export const saveSettings = (settings: AgencySettings) => save(KEYS.settings, se
 export const loadIntegrations = () => load<IntegrationId[]>(KEYS.integrations, []);
 export const saveIntegrations = (ids: IntegrationId[]) => save(KEYS.integrations, ids);
 
-// Posts are stored as metadata (small) + an image map (large, evictable) so a
-// localStorage quota failure only costs images, never the posts themselves.
+// Posts are stored as metadata (small) + a media map (large, evictable) so a
+// localStorage quota failure only costs media, never the posts themselves.
+// Media map keys: `{id}` post image, `{id}:s{i}` slide i, `{id}:kf` video
+// keyframe, `{id}:v` video (data URLs only — remote/proxy URLs stay in meta).
 type ImageMap = Record<string, string>;
+
+// Tiny inline SVG placeholders stay in metadata; every other data URL
+// (Gemini/Pollinations images, keyframes) moves to the evictable map.
+const isHeavy = (url: string | null | undefined): url is string =>
+  !!url && url.startsWith('data:') && !url.startsWith('data:image/svg');
 
 export function loadPosts(): Post[] {
   const meta = load<Post[]>(KEYS.postsMeta, []);
   const images = load<ImageMap>(KEYS.images, {});
-  return meta.map(p => ({ ...p, imageUrl: images[p.id] ?? p.imageUrl ?? null }));
+  return meta.map(p => ({
+    ...p,
+    format: p.format ?? 'post', // migrate pre-format posts
+    imageUrl: images[p.id] ?? p.imageUrl ?? null,
+    slides: p.slides?.map((s, i) => ({ ...s, imageUrl: images[`${p.id}:s${i}`] ?? s.imageUrl ?? null })),
+    video: p.video
+      ? {
+          ...p.video,
+          keyframeUrl: images[`${p.id}:kf`] ?? p.video.keyframeUrl ?? null,
+          videoUrl: images[`${p.id}:v`] ?? p.video.videoUrl ?? null,
+        }
+      : undefined,
+  }));
 }
 
 export function savePosts(posts: Post[]) {
-  const meta = posts.map(p => ({
-    ...p,
-    // Keep tiny inline SVG placeholders in metadata; strip real generated images.
-    imageUrl: p.imageUrl && p.imageUrl.startsWith('data:image/svg') ? p.imageUrl : null,
-  }));
-  save(KEYS.postsMeta, meta);
-
   const images: ImageMap = {};
-  for (const p of posts) {
-    if (p.imageUrl && !p.imageUrl.startsWith('data:image/svg')) images[p.id] = p.imageUrl;
-  }
+  const meta = posts.map(p => {
+    if (isHeavy(p.imageUrl)) images[p.id] = p.imageUrl;
+    p.slides?.forEach((s, i) => { if (isHeavy(s.imageUrl)) images[`${p.id}:s${i}`] = s.imageUrl; });
+    if (p.video) {
+      if (isHeavy(p.video.keyframeUrl)) images[`${p.id}:kf`] = p.video.keyframeUrl;
+      if (isHeavy(p.video.videoUrl)) images[`${p.id}:v`] = p.video.videoUrl;
+    }
+    return {
+      ...p,
+      imageUrl: isHeavy(p.imageUrl) ? null : p.imageUrl,
+      slides: p.slides?.map(s => ({ ...s, imageUrl: isHeavy(s.imageUrl) ? null : s.imageUrl })),
+      video: p.video
+        ? {
+            ...p.video,
+            keyframeUrl: isHeavy(p.video.keyframeUrl) ? null : p.video.keyframeUrl,
+            videoUrl: isHeavy(p.video.videoUrl) ? null : p.video.videoUrl,
+          }
+        : undefined,
+    };
+  });
+  save(KEYS.postsMeta, meta);
   saveImagesWithEviction(images, posts);
 }
 
 function saveImagesWithEviction(images: ImageMap, posts: Post[]) {
-  // Oldest posts' images get evicted first when we run out of quota.
+  // Oldest posts' media gets evicted first when we run out of quota.
   const order = [...posts].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(p => p.id);
   const working = { ...images };
+  const keysFor = (id: string) => Object.keys(working).filter(k => k === id || k.startsWith(`${id}:`));
   for (let attempt = 0; attempt <= order.length; attempt++) {
     try {
       localStorage.setItem(KEYS.images, JSON.stringify(working));
       return;
     } catch {
-      const victim = order.find(id => working[id]);
+      const victim = order.find(id => keysFor(id).length > 0);
       if (!victim) return;
-      delete working[victim];
+      keysFor(victim).forEach(k => delete working[k]);
     }
   }
 }

@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowRight, Building2, CalendarDays, CheckCircle2, FileText, Megaphone, Sparkles } from 'lucide-react';
 import type { Tab } from '../../types';
 import { useApp } from '../../state/AppContext';
-import { PlatformIcon, StatusBadge } from '../shared';
+import { FormatBadge, PlatformIcon, StatusBadge } from '../shared';
 
 function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
   return (
@@ -68,8 +68,11 @@ export function Dashboard({ onNavigate, onOpenPost }: { onNavigate: (tab: Tab) =
             <div className="space-y-2">
               {upcoming.map(p => (
                 <button key={p.id} onClick={() => onOpenPost(p.id)} className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-bb-violet-soft/50 transition-colors text-left">
-                  <div className="w-10 h-10 rounded-lg overflow-hidden bg-bb-violet-soft shrink-0">
+                  <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-bb-violet-soft shrink-0">
                     {p.imageUrl && <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />}
+                    {p.format !== 'post' && (
+                      <span className="absolute bottom-0 left-0 scale-75 origin-bottom-left"><FormatBadge format={p.format} /></span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm truncate">{p.caption}</div>

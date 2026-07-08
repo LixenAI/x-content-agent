@@ -1,14 +1,25 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import type { AgencySettings, Brand, BrandProfileDraft, Campaign, IntegrationId, Platform, Post } from '../types';
+import type {
+  AgencySettings, AspectRatio, Brand, BrandProfileDraft, Campaign, CaptionVariant,
+  FormatMix, IntegrationId, Platform, Post, ProviderStatus,
+} from '../types';
 import * as store from '../lib/store';
 import * as api from '../lib/api';
-import { demoBrandProfile, demoCampaignPosts, placeholderImage } from '../lib/demo';
+import {
+  animatedVideoPlaceholder, demoBrandProfile, demoCampaignPosts,
+  demoVariants, demoVirality, placeholderImage,
+} from '../lib/demo';
+import { PLATFORM_MATRIX, resolveVideoStyle, VIDEO_STYLES } from '../lib/frameworks';
 
 const DEFAULT_SETTINGS: AgencySettings = {
-  agencyName: 'BrandBlast',
+  agencyName: 'Content Pro Agent',
   accentColor: '#7C3AED',
-  logoText: 'BB',
+  logoText: 'CP',
   customDomain: '',
+};
+
+const DEFAULT_PROVIDERS: ProviderStatus = {
+  gemini: false, kling: false, higgsfield: false, pollinations: true, canvaTemplateUrl: null,
 };
 
 export interface CampaignProgress {
@@ -16,6 +27,20 @@ export interface CampaignProgress {
   stage: 'writing' | 'images' | 'done';
   imagesDone: number;
   imagesTotal: number;
+}
+
+export interface CampaignInput {
+  name: string;
+  goal: string;
+  topics: string[];
+  platforms: Platform[];
+  postsPerWeek: number;
+  durationDays: number;
+  startDate: string;
+  formatMix: FormatMix;
+  hookFormula: string;
+  scriptFramework: string;
+  videoStyle: string;
 }
 
 interface AppContextValue {
@@ -26,6 +51,7 @@ interface AppContextValue {
   activeBrand: Brand | null;
   settings: AgencySettings;
   integrations: IntegrationId[];
+  providerStatus: ProviderStatus;
   demoMode: boolean;
   toast: string | null;
   campaignProgress: CampaignProgress | null;
@@ -36,15 +62,17 @@ interface AppContextValue {
   addBrand: (draft: BrandProfileDraft & { website: string; deepKnowledge: string }) => Brand;
   updateBrand: (id: string, patch: Partial<Brand>) => void;
   deleteBrand: (id: string) => void;
-  createCampaign: (input: {
-    name: string; goal: string; topics: string[]; platforms: Platform[];
-    postsPerWeek: number; durationDays: number; startDate: string;
-  }) => Promise<void>;
+  createCampaign: (input: CampaignInput) => Promise<void>;
   deleteCampaign: (id: string) => void;
   updatePost: (id: string, patch: Partial<Post>) => void;
   deletePost: (id: string) => void;
   approveAllDrafts: () => void;
   generatePostImage: (postId: string) => Promise<void>;
+  generateSlideImage: (postId: string, slideIndex: number) => Promise<void>;
+  generateVideoKeyframe: (postId: string) => Promise<void>;
+  generatePostVideo: (postId: string) => Promise<void>;
+  predictViralityFor: (postId: string) => Promise<void>;
+  fetchVariants: (postId: string) => Promise<CaptionVariant[]>;
   rewriteCaption: (postId: string) => Promise<void>;
   toggleIntegration: (id: IntegrationId) => void;
   updateSettings: (patch: Partial<AgencySettings>) => void;
@@ -57,6 +85,55 @@ export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
+}
+
+function computeCounts(total: number, mix: FormatMix): { post: number; carousel: number; video: number } {
+  const carousel = Math.round((mix.carousel / 100) * total);
+  const video = Math.round((mix.video / 100) * total);
+  return { post: Math.max(0, total - carousel - video), carousel, video };
+}
+
+function seedToPost(
+  seed: ReturnType<typeof demoCampaignPosts>[number] | api.GeneratedPostSeed,
+  brand: Brand,
+  campaign: Campaign,
+  start: Date,
+  index: number,
+): Post {
+  const date = new Date(start);
+  date.setDate(date.getDate() + seed.dayOffset);
+  const [h, m] = seed.time.split(':').map(Number);
+  date.setHours(h, m, 0, 0);
+  const videoAspect: AspectRatio = PLATFORM_MATRIX[seed.platform].videoAspect;
+  return {
+    id: store.uid(),
+    brandId: brand.id,
+    campaignId: campaign.id,
+    platform: seed.platform,
+    format: seed.format,
+    caption: seed.caption,
+    hashtags: seed.hashtags,
+    imagePrompt: seed.imagePrompt,
+    imageUrl: placeholderImage(brand, index),
+    imageStatus: 'none',
+    slides: seed.format === 'carousel' && seed.slides
+      ? seed.slides.map(s => ({ ...s, imageUrl: null, imageStatus: 'none' as const }))
+      : undefined,
+    video: seed.format === 'video' && seed.video
+      ? {
+          ...seed.video,
+          aspectRatio: videoAspect,
+          keyframeUrl: null,
+          videoUrl: null,
+          videoStatus: 'none',
+          provider: null,
+        }
+      : undefined,
+    virality: null,
+    scheduledAt: date.toISOString(),
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+  };
 }
 
 function seedData(): { brands: Brand[]; campaigns: Campaign[]; posts: Post[] } {
@@ -85,27 +162,15 @@ function seedData(): { brands: Brand[]; campaigns: Campaign[]; posts: Post[] } {
     startDate: now.toISOString().slice(0, 10),
     status: 'ready',
     createdAt: now.toISOString(),
+    formatMix: { post: 50, carousel: 25, video: 25 },
+    hookFormula: 'auto',
+    scriptFramework: 'auto',
+    videoStyle: 'auto',
   };
-  const seeds = demoCampaignPosts(brand, campaign, 8);
-  const posts: Post[] = seeds.map((s, i) => {
-    const date = new Date(now);
-    date.setDate(date.getDate() + s.dayOffset);
-    const [h, m] = s.time.split(':').map(Number);
-    date.setHours(h, m, 0, 0);
-    return {
-      id: store.uid(),
-      brandId: brand.id,
-      campaignId: campaign.id,
-      platform: s.platform,
-      caption: s.caption,
-      hashtags: s.hashtags,
-      imagePrompt: s.imagePrompt,
-      imageUrl: placeholderImage(brand, i),
-      imageStatus: 'none',
-      scheduledAt: date.toISOString(),
-      status: i < 3 ? 'scheduled' : 'draft',
-      createdAt: now.toISOString(),
-    };
+  const seeds = demoCampaignPosts(brand, campaign, { post: 4, carousel: 2, video: 2 });
+  const posts = seeds.map((s, i) => {
+    const p = seedToPost(s, brand, campaign, now, i);
+    return { ...p, status: (i < 3 ? 'scheduled' : 'draft') as Post['status'] };
   });
   return { brands: [brand], campaigns: [campaign], posts };
 }
@@ -117,11 +182,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeBrandId, setActiveBrandIdState] = useState<string | null>(null);
   const [settings, setSettings] = useState<AgencySettings>(DEFAULT_SETTINGS);
   const [integrations, setIntegrations] = useState<IntegrationId[]>([]);
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus>(DEFAULT_PROVIDERS);
   const [demoMode, setDemoMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [campaignProgress, setCampaignProgress] = useState<CampaignProgress | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const postsRef = useRef<Post[]>([]);
+  postsRef.current = posts;
 
   // Hydrate from localStorage (seed on first run)
   useEffect(() => {
@@ -141,6 +209,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSettings(store.loadSettings(DEFAULT_SETTINGS));
     setIntegrations(store.loadIntegrations());
     setHydrated(true);
+    api.getProviders().then(setProviderStatus).catch(() => setProviderStatus(DEFAULT_PROVIDERS));
   }, []);
 
   // Write-through persistence
@@ -194,23 +263,129 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActiveBrandIdState(prev => (prev === id ? null : prev));
   }, []);
 
-  const generatePostImage = useCallback(async (postId: string) => {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    setPosts(prev => prev.map(p => (p.id === postId ? { ...p, imageStatus: 'generating' } : p)));
-    try {
-      const imageUrl = await api.generateImage(post.imagePrompt);
-      setPosts(prev => prev.map(p => (p.id === postId ? { ...p, imageUrl, imageStatus: 'done' } : p)));
-    } catch {
-      setPosts(prev => prev.map(p => (p.id === postId ? { ...p, imageStatus: 'failed' } : p)));
-      enterDemoMode('Demo mode — image generation unavailable, keeping placeholder');
-    }
-  }, [posts, enterDemoMode]);
+  const updatePost = useCallback((id: string, patch: Partial<Post>) => {
+    setPosts(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
+  }, []);
 
-  const createCampaign = useCallback(async (input: {
-    name: string; goal: string; topics: string[]; platforms: Platform[];
-    postsPerWeek: number; durationDays: number; startDate: string;
-  }) => {
+  const patchSlide = useCallback((postId: string, slideIndex: number, patch: Partial<NonNullable<Post['slides']>[number]>) => {
+    setPosts(prev => prev.map(p =>
+      p.id === postId && p.slides
+        ? { ...p, slides: p.slides.map((s, i) => (i === slideIndex ? { ...s, ...patch } : s)) }
+        : p,
+    ));
+  }, []);
+
+  const patchVideo = useCallback((postId: string, patch: Partial<NonNullable<Post['video']>>) => {
+    setPosts(prev => prev.map(p =>
+      p.id === postId && p.video ? { ...p, video: { ...p.video, ...patch } } : p,
+    ));
+  }, []);
+
+  const generatePostImage = useCallback(async (postId: string) => {
+    const post = postsRef.current.find(p => p.id === postId);
+    if (!post) return;
+    updatePost(postId, { imageStatus: 'generating' });
+    try {
+      const imageUrl = await api.generateImage(post.imagePrompt, PLATFORM_MATRIX[post.platform].imageAspect);
+      updatePost(postId, { imageUrl, imageStatus: 'done' });
+    } catch {
+      updatePost(postId, { imageStatus: 'failed' });
+      enterDemoMode('Image generation unavailable — keeping placeholder');
+    }
+  }, [updatePost, enterDemoMode]);
+
+  const generateSlideImage = useCallback(async (postId: string, slideIndex: number) => {
+    const post = postsRef.current.find(p => p.id === postId);
+    const slide = post?.slides?.[slideIndex];
+    if (!post || !slide) return;
+    patchSlide(postId, slideIndex, { imageStatus: 'generating' });
+    try {
+      const imageUrl = await api.generateImage(slide.imagePrompt, '1:1');
+      patchSlide(postId, slideIndex, { imageUrl, imageStatus: 'done' });
+      if (slideIndex === 0) updatePost(postId, { imageUrl }); // cover doubles as thumbnail
+    } catch {
+      patchSlide(postId, slideIndex, { imageStatus: 'failed' });
+      enterDemoMode('Image generation unavailable — keeping placeholder');
+    }
+  }, [patchSlide, updatePost, enterDemoMode]);
+
+  const generateVideoKeyframe = useCallback(async (postId: string) => {
+    const post = postsRef.current.find(p => p.id === postId);
+    const brand = brands.find(b => b.id === post?.brandId);
+    if (!post?.video || !brand) return;
+    const scene = post.video.scenes[0];
+    try {
+      const keyframeUrl = await api.generateImage(scene?.imagePrompt ?? post.imagePrompt, post.video.aspectRatio);
+      patchVideo(postId, { keyframeUrl, videoStatus: post.video.videoUrl ? post.video.videoStatus : 'keyframe' });
+      updatePost(postId, { imageUrl: keyframeUrl });
+    } catch {
+      patchVideo(postId, { keyframeUrl: animatedVideoPlaceholder(brand, 1) });
+      enterDemoMode('Image generation unavailable — using animated placeholder');
+    }
+  }, [brands, patchVideo, updatePost, enterDemoMode]);
+
+  const generatePostVideo = useCallback(async (postId: string) => {
+    const post = postsRef.current.find(p => p.id === postId);
+    const brand = brands.find(b => b.id === post?.brandId);
+    if (!post?.video || !brand) return;
+
+    let keyframeUrl = post.video.keyframeUrl;
+    patchVideo(postId, { videoStatus: 'generating' });
+    if (!keyframeUrl) {
+      try {
+        keyframeUrl = await api.generateImage(post.video.scenes[0]?.imagePrompt ?? post.imagePrompt, post.video.aspectRatio);
+        patchVideo(postId, { keyframeUrl });
+      } catch {
+        keyframeUrl = null;
+      }
+    }
+
+    const style = VIDEO_STYLES.find(s => s.id === post.video?.style) ?? resolveVideoStyle('auto', 0);
+    const motionPrompt = `${post.video.hook}. ${post.video.scenes[0]?.description ?? ''}. ${style.visualDirection}. Subtle cinematic motion.`;
+    try {
+      const { videoUrl, provider } = await api.generateVideoPro({
+        prompt: motionPrompt,
+        imageUrl: keyframeUrl ?? undefined,
+        aspectRatio: post.video.aspectRatio,
+      });
+      patchVideo(postId, { videoUrl, provider, videoStatus: 'done' });
+      showToast(`Video generated via ${provider}`);
+    } catch {
+      patchVideo(postId, {
+        videoStatus: 'failed',
+        provider: 'demo',
+        keyframeUrl: keyframeUrl ?? animatedVideoPlaceholder(brand, 2),
+      });
+      enterDemoMode('Demo mode — video providers unavailable, showing animated preview');
+    }
+  }, [brands, patchVideo, showToast, enterDemoMode]);
+
+  const predictViralityFor = useCallback(async (postId: string) => {
+    const post = postsRef.current.find(p => p.id === postId);
+    const brand = brands.find(b => b.id === post?.brandId);
+    if (!post || !brand) return;
+    try {
+      const report = await api.predictVirality(post, brand);
+      updatePost(postId, { virality: report });
+    } catch {
+      updatePost(postId, { virality: demoVirality(post) });
+      enterDemoMode('Demo mode — using heuristic virality score');
+    }
+  }, [brands, updatePost, enterDemoMode]);
+
+  const fetchVariants = useCallback(async (postId: string): Promise<CaptionVariant[]> => {
+    const post = postsRef.current.find(p => p.id === postId);
+    const brand = brands.find(b => b.id === post?.brandId);
+    if (!post || !brand) return [];
+    try {
+      return await api.generateVariants(post, brand);
+    } catch {
+      enterDemoMode('Demo mode — using template variants');
+      return demoVariants(post);
+    }
+  }, [brands, enterDemoMode]);
+
+  const createCampaign = useCallback(async (input: CampaignInput) => {
     const brand = brands.find(b => b.id === activeBrandId);
     if (!brand) {
       showToast('Add a brand first');
@@ -224,75 +399,62 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...input,
     };
     setCampaigns(prev => [...prev, campaign]);
-    const count = Math.min(Math.max(1, Math.round((input.postsPerWeek * input.durationDays) / 7)), 30);
+    const total = Math.min(Math.max(1, Math.round((input.postsPerWeek * input.durationDays) / 7)), 30);
+    const counts = computeCounts(total, input.formatMix);
     setCampaignProgress({ campaignId: campaign.id, stage: 'writing', imagesDone: 0, imagesTotal: 0 });
 
     let seeds: api.GeneratedPostSeed[];
-    let usedDemo = false;
     try {
-      seeds = await api.generateCampaignPosts(brand, campaign, count);
+      seeds = await api.generateCampaignPosts(brand, campaign, counts);
     } catch {
-      seeds = demoCampaignPosts(brand, campaign, count);
-      usedDemo = true;
-      enterDemoMode('Demo mode — generated sample posts (no AI key)');
+      seeds = demoCampaignPosts(brand, campaign, counts) as api.GeneratedPostSeed[];
+      enterDemoMode('Demo mode — generated sample content (no AI key)');
     }
 
     const start = new Date(`${input.startDate}T00:00:00`);
-    const newPosts: Post[] = seeds.map((s, i) => {
-      const date = new Date(start);
-      date.setDate(date.getDate() + s.dayOffset);
-      const [h, m] = s.time.split(':').map(Number);
-      date.setHours(h, m, 0, 0);
-      return {
-        id: store.uid(),
-        brandId: brand.id,
-        campaignId: campaign.id,
-        platform: s.platform,
-        caption: s.caption,
-        hashtags: s.hashtags,
-        imagePrompt: s.imagePrompt,
-        imageUrl: placeholderImage(brand, i),
-        imageStatus: 'none',
-        scheduledAt: date.toISOString(),
-        status: 'draft',
-        createdAt: new Date().toISOString(),
-      };
-    });
-
+    const newPosts = seeds.map((s, i) => seedToPost(s, brand, campaign, start, i));
     setPosts(prev => [...prev, ...newPosts]);
     setCampaigns(prev => prev.map(c => (c.id === campaign.id ? { ...c, status: 'ready' } : c)));
 
-    // Generate real images for the first batch (concurrency 2); the rest stay
-    // on placeholders with a per-post "Generate image" action.
-    if (!usedDemo) {
-      const batch = newPosts.slice(0, 10);
-      setCampaignProgress({ campaignId: campaign.id, stage: 'images', imagesDone: 0, imagesTotal: batch.length });
-      let done = 0;
-      const tasks = batch.map(p => async () => {
-        try {
-          const imageUrl = await api.generateImage(p.imagePrompt);
-          setPosts(prev => prev.map(x => (x.id === p.id ? { ...x, imageUrl, imageStatus: 'done' } : x)));
-        } catch {
-          setPosts(prev => prev.map(x => (x.id === p.id ? { ...x, imageStatus: 'failed' } : x)));
-        } finally {
-          done += 1;
-          setCampaignProgress({ campaignId: campaign.id, stage: 'images', imagesDone: done, imagesTotal: batch.length });
+    // Generate real media for the first batch (concurrency 2) — images work
+    // even keyless via the free Pollinations fallback. Remaining posts keep
+    // placeholders with per-post generate buttons.
+    const batch = newPosts.slice(0, 10);
+    setCampaignProgress({ campaignId: campaign.id, stage: 'images', imagesDone: 0, imagesTotal: batch.length });
+    let done = 0;
+    const bump = () => {
+      done += 1;
+      setCampaignProgress({ campaignId: campaign.id, stage: 'images', imagesDone: done, imagesTotal: batch.length });
+    };
+    const tasks = batch.map(p => async () => {
+      try {
+        if (p.format === 'carousel' && p.slides?.length) {
+          const imageUrl = await api.generateImage(p.slides[0].imagePrompt, '1:1');
+          patchSlide(p.id, 0, { imageUrl, imageStatus: 'done' });
+          updatePost(p.id, { imageUrl, imageStatus: 'done' });
+        } else if (p.format === 'video' && p.video) {
+          const keyframeUrl = await api.generateImage(p.video.scenes[0]?.imagePrompt ?? p.imagePrompt, p.video.aspectRatio);
+          patchVideo(p.id, { keyframeUrl, videoStatus: 'keyframe' });
+          updatePost(p.id, { imageUrl: keyframeUrl, imageStatus: 'done' });
+        } else {
+          const imageUrl = await api.generateImage(p.imagePrompt, PLATFORM_MATRIX[p.platform].imageAspect);
+          updatePost(p.id, { imageUrl, imageStatus: 'done' });
         }
-      });
-      await api.runWithConcurrency(tasks, 2);
-    }
+      } catch {
+        updatePost(p.id, { imageStatus: 'failed' });
+      } finally {
+        bump();
+      }
+    });
+    await api.runWithConcurrency(tasks, 2);
 
     setCampaignProgress(null);
-    showToast(`Campaign "${campaign.name}" ready — ${newPosts.length} posts created`);
-  }, [brands, activeBrandId, showToast, enterDemoMode]);
+    showToast(`Campaign "${campaign.name}" ready — ${newPosts.length} pieces of content created`);
+  }, [brands, activeBrandId, showToast, enterDemoMode, patchSlide, patchVideo, updatePost]);
 
   const deleteCampaign = useCallback((id: string) => {
     setCampaigns(prev => prev.filter(c => c.id !== id));
     setPosts(prev => prev.filter(p => p.campaignId !== id));
-  }, []);
-
-  const updatePost = useCallback((id: string, patch: Partial<Post>) => {
-    setPosts(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
   }, []);
 
   const deletePost = useCallback((id: string) => {
@@ -305,7 +467,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [activeBrandId, showToast]);
 
   const rewriteCaption = useCallback(async (postId: string) => {
-    const post = posts.find(p => p.id === postId);
+    const post = postsRef.current.find(p => p.id === postId);
     const brand = brands.find(b => b.id === post?.brandId);
     if (!post || !brand) return;
     try {
@@ -317,7 +479,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {
       enterDemoMode('Demo mode — AI rewrite unavailable');
     }
-  }, [posts, brands, updatePost, showToast, enterDemoMode]);
+  }, [brands, updatePost, showToast, enterDemoMode]);
 
   const toggleIntegration = useCallback((id: IntegrationId) => {
     setIntegrations(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -341,10 +503,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value: AppContextValue = {
     brands, campaigns, posts, activeBrandId, activeBrand, settings, integrations,
-    demoMode, toast, campaignProgress,
+    providerStatus, demoMode, toast, campaignProgress,
     showToast, setActiveBrandId, analyzeBrandWebsite, addBrand, updateBrand, deleteBrand,
     createCampaign, deleteCampaign, updatePost, deletePost, approveAllDrafts,
-    generatePostImage, rewriteCaption, toggleIntegration, updateSettings, resetData,
+    generatePostImage, generateSlideImage, generateVideoKeyframe, generatePostVideo,
+    predictViralityFor, fetchVariants, rewriteCaption,
+    toggleIntegration, updateSettings, resetData,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

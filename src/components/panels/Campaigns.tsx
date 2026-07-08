@@ -1,19 +1,35 @@
 import React, { useState } from 'react';
-import { CalendarDays, Megaphone, Plus, Sparkles, Trash2 } from 'lucide-react';
-import type { Platform, Tab } from '../../types';
+import { CalendarDays, Clapperboard, Image as ImageIcon, Layers, Megaphone, Plus, Sparkles, Trash2 } from 'lucide-react';
+import type { FormatMix, Platform, Tab } from '../../types';
 import { useApp } from '../../state/AppContext';
 import { EmptyState, Modal, PlatformIcon, PLATFORM_LABELS, PrimaryButton } from '../shared';
+import { HOOK_FORMULAS, SCRIPT_FRAMEWORKS, VIDEO_STYLES } from '../../lib/frameworks';
 
 const ALL_PLATFORMS: Platform[] = ['instagram', 'facebook', 'tiktok', 'linkedin'];
 
+const MIX_PRESETS: { id: string; label: string; mix: FormatMix }[] = [
+  { id: 'posts', label: 'Posts only', mix: { post: 100, carousel: 0, video: 0 } },
+  { id: 'balanced', label: 'Balanced', mix: { post: 60, carousel: 25, video: 15 } },
+  { id: 'carousel', label: 'Carousel-heavy', mix: { post: 30, carousel: 55, video: 15 } },
+  { id: 'video', label: 'Video-first', mix: { post: 25, carousel: 15, video: 60 } },
+];
+
+function mixCounts(total: number, mix: FormatMix) {
+  const carousel = Math.round((mix.carousel / 100) * total);
+  const video = Math.round((mix.video / 100) * total);
+  return { post: Math.max(0, total - carousel - video), carousel, video };
+}
+
 const inputCls = 'w-full px-3 py-2 rounded-xl border border-bb-border text-sm focus:outline-none focus:border-bb-primary bg-white';
 
+// Deliberately a div, not a <label>: several fields wrap button groups, and a
+// wrapping label hijacks clicks and accessible names for the first button.
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <div>
       <span className="block text-xs font-semibold text-bb-muted uppercase tracking-wide mb-1.5">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -47,6 +63,10 @@ export function CampaignWizard({ onClose, onCreated }: { onClose: () => void; on
   const [postsPerWeek, setPostsPerWeek] = useState(5);
   const [durationDays, setDurationDays] = useState(30);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [mixPreset, setMixPreset] = useState('balanced');
+  const [hookFormula, setHookFormula] = useState('auto');
+  const [scriptFramework, setScriptFramework] = useState('auto');
+  const [videoStyle, setVideoStyle] = useState('auto');
   const [submitting, setSubmitting] = useState(false);
 
   if (!activeBrand) {
@@ -64,6 +84,8 @@ export function CampaignWizard({ onClose, onCreated }: { onClose: () => void; on
     setTopics(prev => (prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]));
 
   const postCount = Math.min(Math.max(1, Math.round((postsPerWeek * durationDays) / 7)), 30);
+  const mix = MIX_PRESETS.find(p => p.id === mixPreset)!.mix;
+  const counts = mixCounts(postCount, mix);
 
   const submit = async () => {
     if (!name.trim()) { showToast('Give the campaign a name'); return; }
@@ -76,6 +98,7 @@ export function CampaignWizard({ onClose, onCreated }: { onClose: () => void; on
       name: name.trim(),
       goal: goal.trim() || 'Grow brand awareness and engagement',
       topics, platforms, postsPerWeek, durationDays, startDate,
+      formatMix: mix, hookFormula, scriptFramework, videoStyle,
     });
   };
 
@@ -134,9 +157,50 @@ export function CampaignWizard({ onClose, onCreated }: { onClose: () => void; on
             <OptionPills options={[7, 14, 30]} value={durationDays} onChange={setDurationDays} render={v => `${v} days`} />
           </Field>
         </div>
+        <Field label="Content mix">
+          <div className="flex flex-wrap gap-2">
+            {MIX_PRESETS.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setMixPreset(p.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
+                  p.id === mixPreset ? 'bg-bb-primary text-white border-bb-primary' : 'bg-white border-bb-border text-bb-muted hover:border-bb-primary hover:text-bb-primary'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 mt-2 text-xs text-bb-muted">
+            <span className="flex items-center gap-1"><ImageIcon size={11} /> {counts.post} posts</span>
+            <span className="flex items-center gap-1"><Layers size={11} /> {counts.carousel} carousels</span>
+            <span className="flex items-center gap-1"><Clapperboard size={11} /> {counts.video} videos</span>
+          </div>
+        </Field>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Field label="Hook formula">
+            <select value={hookFormula} onChange={e => setHookFormula(e.target.value)} className={inputCls}>
+              <option value="auto">Auto (rotate)</option>
+              {HOOK_FORMULAS.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Script framework">
+            <select value={scriptFramework} onChange={e => setScriptFramework(e.target.value)} className={inputCls}>
+              <option value="auto">Auto (rotate)</option>
+              {SCRIPT_FRAMEWORKS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Video style">
+            <select value={videoStyle} onChange={e => setVideoStyle(e.target.value)} className={inputCls}>
+              <option value="auto">Auto (rotate)</option>
+              {VIDEO_STYLES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </Field>
+        </div>
         <div className="flex items-center justify-between pt-3 border-t border-bb-border">
           <div className="text-sm text-bb-muted">
-            The AI will write <span className="font-semibold text-bb-dark">{postCount} posts</span> in {activeBrand.name}'s voice.
+            The AI will create <span className="font-semibold text-bb-dark">{postCount} pieces of content</span> in {activeBrand.name}'s voice.
           </div>
           <PrimaryButton onClick={submit} disabled={submitting}>
             <Sparkles size={15} /> Generate Campaign
@@ -169,7 +233,7 @@ export function Campaigns({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           <div className="bb-spinner" />
           <div className="flex-1">
             <div className="text-sm font-semibold">
-              {campaignProgress.stage === 'writing' ? 'Writing posts in your brand voice…' : `Generating images ${campaignProgress.imagesDone}/${campaignProgress.imagesTotal}`}
+              {campaignProgress.stage === 'writing' ? 'Writing content in your brand voice…' : `Generating media ${campaignProgress.imagesDone}/${campaignProgress.imagesTotal}`}
             </div>
             {campaignProgress.stage === 'images' && (
               <div className="h-1.5 mt-2 rounded-full bg-bb-violet-soft overflow-hidden">
@@ -195,7 +259,8 @@ export function Campaigns({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           {brandCampaigns.map(c => {
             const cPosts = posts.filter(p => p.campaignId === c.id);
             const scheduled = cPosts.filter(p => p.status !== 'draft').length;
-            const withImages = cPosts.filter(p => p.imageStatus === 'done').length;
+            const carousels = cPosts.filter(p => p.format === 'carousel').length;
+            const videos = cPosts.filter(p => p.format === 'video').length;
             return (
               <div key={c.id} className="bb-card bb-card-hover p-5">
                 <div className="flex items-start justify-between">
@@ -218,18 +283,22 @@ export function Campaigns({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
                   ))}
                   <span className="text-xs text-bb-muted ml-1">{c.durationDays} days · {c.postsPerWeek}/week · starts {c.startDate}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-bb-border text-center">
+                <div className="grid grid-cols-4 gap-2 mt-4 pt-4 border-t border-bb-border text-center">
                   <div>
                     <div className="font-heading font-bold text-lg">{cPosts.length}</div>
-                    <div className="text-[11px] text-bb-muted">Posts</div>
+                    <div className="text-[11px] text-bb-muted">Total</div>
                   </div>
                   <div>
                     <div className="font-heading font-bold text-lg">{scheduled}</div>
                     <div className="text-[11px] text-bb-muted">Approved</div>
                   </div>
                   <div>
-                    <div className="font-heading font-bold text-lg">{withImages}</div>
-                    <div className="text-[11px] text-bb-muted">AI Images</div>
+                    <div className="font-heading font-bold text-lg flex items-center justify-center gap-1"><Layers size={14} className="text-bb-primary" />{carousels}</div>
+                    <div className="text-[11px] text-bb-muted">Carousels</div>
+                  </div>
+                  <div>
+                    <div className="font-heading font-bold text-lg flex items-center justify-center gap-1"><Clapperboard size={14} className="text-bb-primary" />{videos}</div>
+                    <div className="text-[11px] text-bb-muted">Videos</div>
                   </div>
                 </div>
                 <button

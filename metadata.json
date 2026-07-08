@@ -1,6 +1,6 @@
 {
-  "name": "BrandBlast",
-  "description": "AI social media content automation — learn a brand from its website, generate campaigns of on-brand posts with images, and manage everything from one planner.",
+  "name": "Content Pro Agent",
+  "description": "AI content studio — learn a brand from its website, then generate campaigns of posts, carousels, and AI videos using proven hook formulas and script frameworks, with virality prediction and multi-provider media generation (Gemini, Pollinations, Kling, Higgsfield, Veo).",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

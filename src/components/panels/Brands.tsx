@@ -43,12 +43,14 @@ function TopicChips({ topics, onChange }: { topics: string[]; onChange: (topics:
   );
 }
 
+// Deliberately a div, not a <label>: some fields wrap chip/button groups, and a
+// wrapping label hijacks clicks and accessible names for the first control.
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <div>
       <span className="block text-xs font-semibold text-bb-muted uppercase tracking-wide mb-1.5">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 

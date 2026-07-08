@@ -2,8 +2,183 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import cors from "cors";
+import crypto from "node:crypto";
 
 dotenv.config();
+
+const hasGeminiKey = () => !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY";
+const hasKlingKeys = () => !!process.env.KLING_ACCESS_KEY && !!process.env.KLING_SECRET_KEY;
+const hasHiggsfieldKey = () => !!process.env.HIGGSFIELD_API_KEY;
+
+const ASPECT_DIMS: Record<string, { width: number; height: number }> = {
+  "1:1": { width: 1024, height: 1024 },
+  "9:16": { width: 768, height: 1344 },
+  "16:9": { width: 1344, height: 768 },
+};
+
+// ---------- Image providers ----------
+
+async function geminiImage(prompt: string, aspectRatio: string): Promise<string> {
+  const { GoogleGenAI } = await import("@google/genai");
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash-image',
+    contents: { parts: [{ text: prompt }] },
+    config: { imageConfig: { aspectRatio: (["1:1", "9:16", "16:9"].includes(aspectRatio) ? aspectRatio : "1:1") as "1:1" | "9:16" | "16:9" } },
+  });
+  for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+    if (part.inlineData?.data) return `data:image/png;base64,${part.inlineData.data}`;
+  }
+  throw new Error("Gemini returned no image data");
+}
+
+// Free, keyless image generation — keeps demo mode producing real images.
+async function pollinationsImage(prompt: string, aspectRatio: string): Promise<string> {
+  const { width, height } = ASPECT_DIMS[aspectRatio] ?? ASPECT_DIMS["1:1"];
+  const seed = Math.floor(Math.random() * 1e9);
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 600))}?width=${width}&height=${height}&nologo=true&seed=${seed}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    const contentType = res.headers.get("content-type") || "";
+    if (!res.ok || !contentType.startsWith("image/")) {
+      throw new Error(`Pollinations failed (${res.status})`);
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    return `data:${contentType};base64,${buf.toString("base64")}`;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ---------- Video providers ----------
+// Kling and Higgsfield request/response shapes follow their public API docs
+// but are unverified without live keys; each provider is isolated so a shape
+// mismatch just falls through the cascade to the next provider.
+
+interface VideoOpts {
+  prompt?: string;
+  imageUrl?: string; // may be a data URL
+  aspectRatio: string;
+}
+
+function dataUrlToBase64(url: string): string | null {
+  const match = url.match(/^data:[^;]+;base64,(.+)$/);
+  return match ? match[1] : null;
+}
+
+function klingJwt(accessKey: string, secretKey: string): string {
+  const b64url = (obj: object) =>
+    Buffer.from(JSON.stringify(obj)).toString("base64url");
+  const header = b64url({ alg: "HS256", typ: "JWT" });
+  const now = Math.floor(Date.now() / 1000);
+  const payload = b64url({ iss: accessKey, exp: now + 1800, nbf: now - 5 });
+  const signature = crypto.createHmac("sha256", secretKey).update(`${header}.${payload}`).digest("base64url");
+  return `${header}.${payload}.${signature}`;
+}
+
+async function klingVideo(opts: VideoOpts): Promise<string> {
+  const token = klingJwt(process.env.KLING_ACCESS_KEY!, process.env.KLING_SECRET_KEY!);
+  const base = "https://api.klingai.com/v1";
+  const isImageToVideo = !!opts.imageUrl;
+  const path = isImageToVideo ? "/videos/image2video" : "/videos/text2video";
+  const body: Record<string, unknown> = {
+    model_name: "kling-v1-6",
+    prompt: opts.prompt || "Cinematic subtle motion, high quality",
+    aspect_ratio: opts.aspectRatio,
+    duration: "5",
+    mode: "std",
+  };
+  if (isImageToVideo && opts.imageUrl) {
+    body.image = dataUrlToBase64(opts.imageUrl) ?? opts.imageUrl;
+  }
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+  const createRes = await fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  const created = await createRes.json().catch(() => ({}));
+  if (!createRes.ok || created.code !== 0) {
+    throw new Error(`Kling create failed: ${created.message || createRes.status}`);
+  }
+  const taskId = created.data?.task_id;
+  if (!taskId) throw new Error("Kling returned no task_id");
+
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 8000));
+    const pollToken = klingJwt(process.env.KLING_ACCESS_KEY!, process.env.KLING_SECRET_KEY!);
+    const pollRes = await fetch(`${base}${path}/${taskId}`, { headers: { Authorization: `Bearer ${pollToken}` } });
+    const poll = await pollRes.json().catch(() => ({}));
+    const status = poll.data?.task_status;
+    if (status === "succeed") {
+      const url = poll.data?.task_result?.videos?.[0]?.url;
+      if (url) return url;
+      throw new Error("Kling succeeded but returned no video URL");
+    }
+    if (status === "failed") throw new Error(`Kling task failed: ${poll.data?.task_status_msg || "unknown"}`);
+  }
+  throw new Error("Kling task timed out");
+}
+
+async function higgsfieldVideo(opts: VideoOpts): Promise<string> {
+  const base = "https://platform.higgsfield.ai/v1";
+  const headers = {
+    "Content-Type": "application/json",
+    "hf-api-key": process.env.HIGGSFIELD_API_KEY!,
+    Authorization: `Bearer ${process.env.HIGGSFIELD_API_KEY!}`,
+  };
+  const body: Record<string, unknown> = {
+    prompt: opts.prompt || "Cinematic subtle motion, high quality",
+    aspect_ratio: opts.aspectRatio,
+  };
+  if (opts.imageUrl && !opts.imageUrl.startsWith("data:")) body.image_url = opts.imageUrl;
+  const createRes = await fetch(`${base}/image2video`, { method: "POST", headers, body: JSON.stringify(body) });
+  const created = await createRes.json().catch(() => ({}));
+  if (!createRes.ok) throw new Error(`Higgsfield create failed: ${created.message || createRes.status}`);
+  const jobId = created.id || created.job_set_id || created.data?.id;
+  if (!jobId) throw new Error("Higgsfield returned no job id");
+
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 8000));
+    const pollRes = await fetch(`${base}/job-sets/${jobId}`, { headers });
+    const poll = await pollRes.json().catch(() => ({}));
+    const job = poll.jobs?.[0] ?? poll;
+    const status = job.status || poll.status;
+    if (status === "completed" || status === "succeed") {
+      const url = job.results?.raw?.url || job.result?.url || job.video_url;
+      if (url) return url;
+      throw new Error("Higgsfield completed but returned no video URL");
+    }
+    if (status === "failed" || status === "nsfw") throw new Error(`Higgsfield job failed: ${status}`);
+  }
+  throw new Error("Higgsfield job timed out");
+}
+
+async function veoVideo(opts: VideoOpts): Promise<string> {
+  const { GoogleGenAI } = await import("@google/genai");
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const aspectRatio = opts.aspectRatio === "9:16" ? "9:16" : "16:9";
+  const params: Record<string, unknown> = {
+    model: 'veo-3.1-lite-generate-preview',
+    prompt: opts.prompt || "Cinematic subtle motion, high quality",
+    config: { numberOfVideos: 1, resolution: '1080p', aspectRatio },
+  };
+  if (opts.imageUrl) {
+    const base64 = dataUrlToBase64(opts.imageUrl);
+    if (base64) {
+      const mimeType = opts.imageUrl.slice(5, opts.imageUrl.indexOf(';'));
+      params.image = { imageBytes: base64, mimeType };
+    }
+  }
+  let operation = await ai.models.generateVideos(params as any);
+  while (!operation.done) {
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    operation = await ai.operations.getVideosOperation({ operation });
+  }
+  const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+  if (!downloadLink) throw new Error("Veo returned no video URI");
+  return `/api/video-proxy?url=${encodeURIComponent(downloadLink)}`;
+}
 
 async function startServer() {
   const app = express();
@@ -190,51 +365,68 @@ Return a JSON object with exactly these fields:
     }
   });
 
-  // API Route for Gemini Image
+  // Image generation with provider cascade: Gemini -> Pollinations (free, keyless)
   app.post("/api/generate-image", async (req, res) => {
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-        return res.status(401).json({ error: "Your Gemini API key is set to 'MY_GEMINI_API_KEY'. Please open Settings (gear icon) -> Secrets, and DELETE the GEMINI_API_KEY to use the free key, or replace it with a valid key." });
-      }
-      const { prompt } = req.body;
-      if (!prompt) return res.status(400).json({ error: "Prompt is required." });
+    const { prompt, aspectRatio = "1:1" } = req.body;
+    if (!prompt) return res.status(400).json({ error: "Prompt is required." });
 
-      const { GoogleGenAI } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey });
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: prompt }] },
-        config: { imageConfig: { aspectRatio: "1:1" } },
-      });
-
-      let base64Image = null;
-      if (response.candidates && response.candidates[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData) {
-            base64Image = part.inlineData.data;
-            break;
-          }
-        }
+    if (hasGeminiKey()) {
+      try {
+        const imageUrl = await geminiImage(prompt, aspectRatio);
+        return res.json({ imageUrl, provider: "gemini" });
+      } catch (err: any) {
+        console.error("Gemini Image Error (falling back to Pollinations):", err.message);
       }
-
-      if (base64Image) {
-        res.json({ imageUrl: `data:image/png;base64,${base64Image}` });
-      } else {
-        res.status(500).json({ error: "Failed to generate image." });
-      }
-    } catch (err: any) {
-      console.error("Gemini Image Error:", err);
-      let errorMsg = err.message || 'Failed to generate image';
-      if (errorMsg.includes('{"error":')) {
-        try {
-          const parsed = JSON.parse(errorMsg.substring(errorMsg.indexOf('{')));
-          errorMsg = parsed.error?.message || errorMsg;
-        } catch(e) {}
-      }
-      res.status(500).json({ error: errorMsg });
     }
+    try {
+      const imageUrl = await pollinationsImage(prompt, aspectRatio);
+      return res.json({ imageUrl, provider: "pollinations" });
+    } catch (err: any) {
+      console.error("Pollinations Image Error:", err.message);
+      return res.status(503).json({ error: "No image provider available right now." });
+    }
+  });
+
+  // Which media providers are configured (drives Integrations UI status chips)
+  app.get("/api/providers", (_req, res) => {
+    res.json({
+      gemini: hasGeminiKey(),
+      kling: hasKlingKeys(),
+      higgsfield: hasHiggsfieldKey(),
+      pollinations: true,
+      canvaTemplateUrl: process.env.CANVA_TEMPLATE_URL || null,
+    });
+  });
+
+  // Video generation with provider cascade: Kling -> Higgsfield -> Veo
+  app.post("/api/generate-video-pro", async (req, res) => {
+    const { prompt, imageUrl, aspectRatio = "9:16", provider } = req.body;
+    if (!prompt && !imageUrl) {
+      return res.status(400).json({ error: "prompt or imageUrl is required." });
+    }
+    const opts: VideoOpts = { prompt, imageUrl, aspectRatio };
+
+    const all: { name: string; available: boolean; run: (o: VideoOpts) => Promise<string> }[] = [
+      { name: "kling", available: hasKlingKeys(), run: klingVideo },
+      { name: "higgsfield", available: hasHiggsfieldKey(), run: higgsfieldVideo },
+      { name: "veo", available: hasGeminiKey(), run: veoVideo },
+    ];
+    const candidates = all.filter(p => p.available && (!provider || p.name === provider));
+
+    const attempts: string[] = [];
+    for (const p of candidates) {
+      try {
+        const videoUrl = await p.run(opts);
+        return res.json({ videoUrl, provider: p.name });
+      } catch (err: any) {
+        console.error(`Video provider ${p.name} failed:`, err.message);
+        attempts.push(`${p.name}: ${err.message}`);
+      }
+    }
+    res.status(503).json({
+      error: "No video provider available — set KLING_ACCESS_KEY/KLING_SECRET_KEY, HIGGSFIELD_API_KEY, or GEMINI_API_KEY.",
+      attempts,
+    });
   });
 
   // API Route for Gemini TTS

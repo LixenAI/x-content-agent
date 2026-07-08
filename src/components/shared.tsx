@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
-import { Facebook, Instagram, Linkedin, Music2, X, Zap } from 'lucide-react';
-import type { Platform, PostStatus } from '../types';
+import { Facebook, Image as ImageIcon, Instagram, Layers, Linkedin, Music2, Play, X, Zap } from 'lucide-react';
+import type { Platform, PostFormat, PostStatus } from '../types';
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
   facebook: 'Facebook',
@@ -31,6 +31,31 @@ const STATUS_STYLES: Record<PostStatus, string> = {
   scheduled: 'bg-violet-100 text-violet-700',
   posted: 'bg-emerald-100 text-emerald-700',
 };
+
+export const FORMAT_LABELS: Record<PostFormat, string> = {
+  post: 'Post',
+  carousel: 'Carousel',
+  video: 'Video',
+};
+
+export function FormatIcon({ format, size = 12, className = '' }: { format: PostFormat; size?: number; className?: string }) {
+  const props = { size, className };
+  switch (format) {
+    case 'carousel': return <Layers {...props} />;
+    case 'video': return <Play {...props} />;
+    default: return <ImageIcon {...props} />;
+  }
+}
+
+export function FormatBadge({ format }: { format: PostFormat }) {
+  if (format === 'post') return null;
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-bb-dark/80 text-white text-[9px] font-semibold uppercase tracking-wide">
+      <FormatIcon format={format} size={9} />
+      {FORMAT_LABELS[format]}
+    </span>
+  );
+}
 
 export function StatusBadge({ status }: { status: PostStatus }) {
   return (
