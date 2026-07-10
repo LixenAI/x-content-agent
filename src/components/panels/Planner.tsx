@@ -180,6 +180,9 @@ export function Planner({ onOpenPost }: { onOpenPost: (id: string) => void }) {
                   {new Date(p.scheduledAt).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                 </div>
               </div>
+              {p.publishError && (
+                <span className="w-2 h-2 rounded-full bg-bb-error shrink-0" title={`Publish failed: ${p.publishError}`} />
+              )}
               <StatusBadge status={p.status} />
             </button>
           ))}

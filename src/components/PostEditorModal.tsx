@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Image as ImageIcon, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Image as ImageIcon, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import type { PostStatus } from '../types';
 import { useApp } from '../state/AppContext';
 import { FORMAT_LABELS, FormatIcon, Modal, PlatformIcon, PLATFORM_LABELS, PrimaryButton, StatusBadge } from './shared';
@@ -11,13 +11,23 @@ import { VariantsPanel } from './editor/VariantsPanel';
 const inputCls = 'w-full px-3 py-2 rounded-xl border border-bb-border text-sm focus:outline-none focus:border-bb-primary bg-white';
 
 export function PostEditorModal({ postId, onClose }: { postId: string; onClose: () => void }) {
-  const { posts, brands, updatePost, deletePost, generatePostImage, rewriteCaption, showToast } = useApp();
+  const { posts, brands, updatePost, deletePost, generatePostImage, rewriteCaption, publishPostNow, metaStatus, showToast } = useApp();
   const post = posts.find(p => p.id === postId);
   const brand = brands.find(b => b.id === post?.brandId);
   const [rewriting, setRewriting] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   if (!post) return null;
+
+  const realAccount = (brand?.socialAccounts ?? []).find(a => a.platform === post.platform && a.igUserId);
+  const canPublishNow = !!realAccount && metaStatus.connected && post.status !== 'posted';
+
+  const doPublish = async () => {
+    setPublishing(true);
+    await publishPostNow(post.id);
+    setPublishing(false);
+  };
 
   const localDateTime = (() => {
     const d = new Date(post.scheduledAt);
@@ -149,6 +159,33 @@ export function PostEditorModal({ postId, onClose }: { postId: string; onClose: 
 
           <ViralityCard post={post} />
           <VariantsPanel post={post} />
+
+          {post.permalink && (
+            <a
+              href={post.permalink}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium hover:bg-emerald-100"
+            >
+              <ExternalLink size={14} /> Published on Instagram — view post
+            </a>
+          )}
+          {post.publishError && (
+            <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-bb-error text-xs">
+              Publish failed: {post.publishError}
+            </div>
+          )}
+          {canPublishNow && (
+            <button
+              onClick={doPublish}
+              disabled={publishing}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {publishing
+                ? <><RefreshCw size={14} className="animate-spin" /> Publishing to {realAccount?.handle}…</>
+                : <><Send size={14} /> Publish now to {realAccount?.handle}</>}
+            </button>
+          )}
 
           <div className="flex items-center justify-between pt-3 border-t border-bb-border">
             <button

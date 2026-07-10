@@ -1,6 +1,6 @@
 import type {
   AspectRatio, Brand, BrandProfileDraft, Campaign, CaptionVariant,
-  Platform, Post, PostFormat, ProviderStatus, ViralityReport,
+  MetaIgAccount, MetaStatus, Platform, Post, PostFormat, ProviderStatus, ViralityReport,
 } from '../types';
 import { BROLL_CATEGORIES, frameworksPromptBlock, HOOK_FORMULAS, PLATFORM_MATRIX } from './frameworks';
 
@@ -31,6 +31,24 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 export async function getProviders(): Promise<ProviderStatus> {
   return request<ProviderStatus>('/api/providers');
+}
+
+export async function getMetaStatus(): Promise<MetaStatus> {
+  return request<MetaStatus>('/api/meta/status');
+}
+
+export async function getMetaAccounts(): Promise<MetaIgAccount[]> {
+  const { accounts } = await request<{ accounts: MetaIgAccount[] }>('/api/meta/accounts');
+  return accounts;
+}
+
+export async function disconnectMeta(): Promise<void> {
+  await request('/api/meta/disconnect', { method: 'POST' });
+}
+
+export async function publishNow(postId: string): Promise<Post> {
+  const { post } = await request<{ post: Post }>(`/api/posts/${postId}/publish`, { method: 'POST' });
+  return post;
 }
 
 export async function analyzeWebsite(url: string): Promise<BrandProfileDraft> {

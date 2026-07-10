@@ -27,6 +27,25 @@ Images generate for free even with zero configuration. Video falls back to an an
 
 React 19 + Vite + Tailwind 4 frontend, Express server proxying the AI providers, localStorage persistence. No auth, no database, no real social posting — demo-quality build.
 
+## Real Instagram publishing (one Meta connection)
+
+The app can publish Instagram posts for real — one agency-level Meta login unlocks every Facebook Page + Instagram Business account you admin, and you assign each one to a brand.
+
+**Setup (Meta Developer Portal, ~10 minutes):**
+
+1. Go to [developers.facebook.com](https://developers.facebook.com) → Create App → type **Business**.
+2. Add products: **Facebook Login for Business** and **Instagram Graph API**.
+3. Facebook Login → Settings → *Valid OAuth Redirect URIs*: add `{APP_URL}/api/meta/callback` (e.g. `https://your-app.onrender.com/api/meta/callback`; `http://localhost:3000/api/meta/callback` also works while the app is in Development mode).
+4. Make sure your Instagram account is **Business or Creator** and linked to a Facebook Page you admin (Instagram app → Settings → Business tools).
+5. Copy the **App ID** and **App Secret** into `.env.local` as `META_APP_ID` / `META_APP_SECRET`, and set `APP_URL` to your public origin.
+6. Leave the Meta app in **Development mode** — as the app admin you get `instagram_basic`, `instagram_content_publish`, `pages_show_list`, and `pages_read_engagement` without app review.
+
+**Usage:** Integrations → *Connect Meta account* → complete the Facebook login → open the Instagram card for a brand → *Assign* one of your real accounts. Assigned accounts show a green **Live** chip (hand-typed handles stay **Simulated**).
+
+**How auto-publish works:** a worker runs every 60 seconds and publishes any post that is `scheduled`, past its time, and on a brand with a Live Instagram account — images and carousels immediately, videos as Reels (only when hosted at a public URL, e.g. generated via Kling/Higgsfield). Failures retry up to 3 times, then show a red dot in the Planner with the error. There's also a *Publish now* button in the post editor.
+
+**Important:** Meta fetches your post images from `{APP_URL}/media/:key`, so real publishing only works when the app is deployed at a public https URL (Render works great) — on localhost, publish attempts fail with a clear message.
+
 ## Run locally
 
 **Prerequisites:** Node.js

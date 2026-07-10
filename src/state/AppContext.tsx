@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type {
   AgencySettings, AspectRatio, Brand, BrandProfileDraft, Campaign, CaptionVariant,
-  FormatMix, GhlSubAccount, IntegrationId, Platform, Post, ProviderStatus, SocialAccount,
+  FormatMix, GhlSubAccount, IntegrationId, MetaStatus, Platform, Post, ProviderStatus, SocialAccount,
 } from '../types';
 import * as store from '../lib/store';
 import * as api from '../lib/api';
@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS: AgencySettings = {
 
 const DEFAULT_PROVIDERS: ProviderStatus = {
   gemini: false, kling: false, higgsfield: false, pollinations: true, canvaTemplateUrl: null,
+  metaConfigured: false,
 };
 
 export interface CampaignProgress {
@@ -74,8 +75,11 @@ interface AppContextValue {
   predictViralityFor: (postId: string) => Promise<void>;
   fetchVariants: (postId: string) => Promise<CaptionVariant[]>;
   rewriteCaption: (postId: string) => Promise<void>;
+  metaStatus: MetaStatus;
+  refreshMetaStatus: () => Promise<void>;
+  publishPostNow: (postId: string) => Promise<{ ok: boolean; error?: string }>;
   toggleIntegration: (id: IntegrationId) => void;
-  connectSocialAccount: (brandId: string, platform: Platform, handle: string, displayName?: string) => void;
+  connectSocialAccount: (brandId: string, platform: Platform, handle: string, displayName?: string, meta?: { igUserId: string; pageId: string; avatarUrl?: string }) => void;
   disconnectSocialAccount: (brandId: string, accountId: string) => void;
   connectGhlSubAccount: (brandId: string, subAccountId: string, displayName?: string) => void;
   disconnectGhlSubAccount: (brandId: string, accountId: string) => void;
@@ -192,6 +196,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AgencySettings>(DEFAULT_SETTINGS);
   const [integrations, setIntegrations] = useState<IntegrationId[]>([]);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus>(DEFAULT_PROVIDERS);
+  const [metaStatus, setMetaStatus] = useState<MetaStatus>({ connected: false });
   const [demoMode, setDemoMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [campaignProgress, setCampaignProgress] = useState<CampaignProgress | null>(null);
@@ -237,7 +242,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         showToast('Offline — changes will not be saved');
       }
       api.getProviders().then(setProviderStatus).catch(() => setProviderStatus(DEFAULT_PROVIDERS));
+      api.getMetaStatus().then(setMetaStatus).catch(() => setMetaStatus({ connected: false }));
     })();
+    // Surface the OAuth redirect result once, then clean the URL.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('meta') === 'connected') {
+      showToast('Meta account connected — assign an Instagram account to a brand in Integrations');
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('meta') === 'error') {
+      showToast(`Meta connection failed: ${params.get('reason') ?? 'unknown error'}`);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Write-through persistence: diff each collection against the previous
@@ -315,13 +331,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setBrands(prev => prev.map(b => (b.id === id ? { ...b, ...patch } : b)));
   }, []);
 
-  const connectSocialAccount = useCallback((brandId: string, platform: Platform, handle: string, displayName?: string) => {
+  const connectSocialAccount = useCallback((brandId: string, platform: Platform, handle: string, displayName?: string, meta?: { igUserId: string; pageId: string; avatarUrl?: string }) => {
     const account: SocialAccount = {
       id: store.uid(),
       platform,
       handle: handle.startsWith('@') ? handle : `@${handle}`,
       displayName: displayName || handle.replace(/^@/, ''),
       connectedAt: new Date().toISOString(),
+      ...(meta ? { igUserId: meta.igUserId, pageId: meta.pageId, avatarUrl: meta.avatarUrl } : {}),
     };
     setBrands(prev => prev.map(b => (b.id === brandId
       ? { ...b, socialAccounts: [...(b.socialAccounts ?? []), account] }
@@ -577,6 +594,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [brands, updatePost, showToast, enterDemoMode]);
 
+  const refreshMetaStatus = useCallback(async () => {
+    try { setMetaStatus(await api.getMetaStatus()); } catch { setMetaStatus({ connected: false }); }
+  }, []);
+
+  const publishPostNow = useCallback(async (postId: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const updated = await api.publishNow(postId);
+      setPosts(prev => prev.map(p => (p.id === postId ? { ...p, ...updated } : p)));
+      showToast('Published to Instagram 🎉');
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Publish failed';
+      updatePost(postId, { publishError: message });
+      return { ok: false, error: message };
+    }
+  }, [showToast, updatePost]);
+
   const toggleIntegration = useCallback((id: IntegrationId) => {
     setIntegrations(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   }, []);
@@ -609,6 +643,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleIntegration, updateSettings, resetData,
     connectSocialAccount, disconnectSocialAccount,
     connectGhlSubAccount, disconnectGhlSubAccount,
+    metaStatus, refreshMetaStatus, publishPostNow,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -11,6 +11,9 @@ export interface SocialAccount {
   handle: string;         // e.g. "@bloomcoffee"
   displayName: string;    // e.g. "Bloom Coffee Co."
   connectedAt: string;
+  igUserId?: string;      // real IG Business account id (presence ⇒ publishes for real)
+  pageId?: string;        // linked FB Page id
+  avatarUrl?: string;     // profile picture from Graph API
 }
 
 export interface GhlSubAccount {
@@ -110,6 +113,10 @@ export interface Post {
   scheduledAt: string;
   status: PostStatus;
   createdAt: string;
+  publishedAt?: string;
+  permalink?: string;
+  publishError?: string | null;
+  publishAttempts?: number;
 }
 
 export interface AgencySettings {
@@ -138,6 +145,21 @@ export interface ProviderStatus {
   higgsfield: boolean;
   pollinations: boolean;
   canvaTemplateUrl: string | null;
+  metaConfigured: boolean;
+}
+
+export interface MetaStatus {
+  connected: boolean;
+  name?: string;
+  expiresAt?: string;
+}
+
+export interface MetaIgAccount {
+  igUserId: string;
+  pageId: string;
+  pageName: string;
+  username: string;
+  avatarUrl?: string;
 }
 
 export interface CaptionVariant {

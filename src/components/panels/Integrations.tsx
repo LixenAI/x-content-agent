@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Check, Clapperboard, FlaskConical, KeyRound, Palette, Plus, Trash2, Zap } from 'lucide-react';
-import type { IntegrationId, Platform, ProviderStatus, SocialAccount } from '../../types';
+import React, { useEffect, useState } from 'react';
+import { Check, Clapperboard, FlaskConical, KeyRound, Link2, Palette, Plus, Trash2, Zap } from 'lucide-react';
+import type { IntegrationId, MetaIgAccount, Platform, ProviderStatus, SocialAccount } from '../../types';
 import { useApp } from '../../state/AppContext';
+import { getMetaAccounts, disconnectMeta } from '../../lib/api';
 import { PlatformIcon, PLATFORM_LABELS } from '../shared';
 
 interface SocialDef {
@@ -49,7 +50,13 @@ function ConnectedAccountRow({ account, onDisconnect }: { account: SocialAccount
   return (
     <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-bb-violet-soft/60 border border-bb-border">
       <div className="flex items-center gap-2 min-w-0">
+        {account.avatarUrl && <img src={account.avatarUrl} alt="" className="w-5 h-5 rounded-full" />}
         <span className="text-sm font-semibold text-bb-dark truncate">{account.handle}</span>
+        {account.igUserId ? (
+          <span className="px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">Live</span>
+        ) : (
+          <span className="px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-semibold uppercase tracking-wide">Simulated</span>
+        )}
         <span className="text-[11px] text-bb-muted">· {relativeTime(account.connectedAt)}</span>
       </div>
       <button
@@ -63,11 +70,77 @@ function ConnectedAccountRow({ account, onDisconnect }: { account: SocialAccount
   );
 }
 
+function MetaConnectionCard() {
+  const { providerStatus, metaStatus, refreshMetaStatus, showToast } = useApp();
+  const [busy, setBusy] = useState(false);
+
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      await disconnectMeta();
+      await refreshMetaStatus();
+      showToast('Meta account disconnected');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="bb-card p-5">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${metaStatus.connected ? 'bb-gradient text-white' : 'bg-bb-violet-soft text-bb-primary'}`}>
+          <Link2 size={20} />
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <div className="font-heading font-semibold">Meta Connection <span className="text-xs font-normal text-bb-muted">(agency-wide)</span></div>
+          {metaStatus.connected ? (
+            <div className="text-xs text-bb-success font-medium flex items-center gap-1 mt-0.5">
+              <Check size={11} /> Connected as {metaStatus.name}
+              {metaStatus.expiresAt && <span className="text-bb-muted font-normal">· token renews {new Date(metaStatus.expiresAt).toLocaleDateString()}</span>}
+            </div>
+          ) : providerStatus.metaConfigured ? (
+            <div className="text-xs text-bb-muted mt-0.5">One Meta login unlocks every Facebook Page and Instagram Business account you admin — assign them to brands below.</div>
+          ) : (
+            <div className="text-xs text-bb-muted mt-0.5">Set <code className="font-mono">META_APP_ID</code> and <code className="font-mono">META_APP_SECRET</code> in the environment (see README for the Meta Developer Portal checklist).</div>
+          )}
+        </div>
+        {metaStatus.connected ? (
+          <button
+            onClick={disconnect}
+            disabled={busy}
+            className="px-4 py-2 rounded-xl border border-bb-border text-sm font-semibold text-bb-muted hover:text-bb-error hover:border-red-200 hover:bg-red-50 transition-colors"
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            onClick={() => { window.location.href = '/api/meta/login'; }}
+            disabled={!providerStatus.metaConfigured}
+            className="bb-gradient text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+          >
+            Connect Meta account
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SocialCard({ def }: { def: SocialDef }) {
-  const { activeBrand, connectSocialAccount, disconnectSocialAccount, showToast } = useApp();
+  const { activeBrand, connectSocialAccount, disconnectSocialAccount, metaStatus, showToast } = useApp();
   const [inputOpen, setInputOpen] = useState(false);
   const [handle, setHandle] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [igAccounts, setIgAccounts] = useState<MetaIgAccount[] | null>(null);
+  const [igError, setIgError] = useState<string | null>(null);
+
+  const canPickReal = def.platform === 'instagram' && metaStatus.connected;
+
+  useEffect(() => {
+    if (inputOpen && canPickReal && igAccounts === null) {
+      getMetaAccounts().then(setIgAccounts).catch(err => setIgError(err instanceof Error ? err.message : 'Failed to load accounts'));
+    }
+  }, [inputOpen, canPickReal, igAccounts]);
 
   if (!activeBrand) return null;
   const accounts = (activeBrand.socialAccounts ?? []).filter(a => a.platform === def.platform);
@@ -76,6 +149,16 @@ function SocialCard({ def }: { def: SocialDef }) {
   const openInput = () => {
     setHandle(slugifyHandle(activeBrand.name));
     setInputOpen(true);
+  };
+
+  const assignReal = (ig: MetaIgAccount) => {
+    connectSocialAccount(activeBrand.id, 'instagram', `@${ig.username}`, ig.pageName, {
+      igUserId: ig.igUserId,
+      pageId: ig.pageId,
+      avatarUrl: ig.avatarUrl,
+    });
+    showToast(`@${ig.username} assigned to ${activeBrand.name} — posts will publish for real`);
+    setInputOpen(false);
   };
 
   const submit = () => {
@@ -125,13 +208,47 @@ function SocialCard({ def }: { def: SocialDef }) {
 
       {inputOpen ? (
         <div className="mt-3 space-y-2">
+          {canPickReal && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-bb-muted uppercase tracking-wide">Your Instagram accounts (via Meta)</div>
+              {igError && <div className="text-xs text-bb-error bg-red-50 rounded-xl px-3 py-2">{igError}</div>}
+              {igAccounts === null && !igError && (
+                <div className="flex items-center gap-2 text-xs text-bb-muted px-1 py-2"><div className="bb-spinner" /> Loading accounts…</div>
+              )}
+              {igAccounts?.length === 0 && (
+                <div className="text-xs text-bb-muted px-1 py-1">No Instagram Business accounts found — make sure your IG is Business/Creator and linked to a Facebook Page you admin.</div>
+              )}
+              {(igAccounts ?? []).map(ig => {
+                const alreadyAssigned = accounts.some(a => a.igUserId === ig.igUserId);
+                return (
+                  <div key={ig.igUserId} className="flex items-center justify-between px-3 py-2 rounded-xl border border-bb-border bg-white">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {ig.avatarUrl && <img src={ig.avatarUrl} alt="" className="w-6 h-6 rounded-full" />}
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold truncate">@{ig.username}</div>
+                        <div className="text-[10px] text-bb-muted truncate">{ig.pageName}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => assignReal(ig)}
+                      disabled={alreadyAssigned}
+                      className="shrink-0 px-2.5 py-1 rounded-lg bb-gradient text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40"
+                    >
+                      {alreadyAssigned ? 'Assigned' : 'Assign'}
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="text-[11px] font-semibold text-bb-muted uppercase tracking-wide pt-1.5">Or add a simulated handle</div>
+            </div>
+          )}
           <input
             value={handle}
             onChange={e => setHandle(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') setInputOpen(false); }}
             placeholder={`@${def.name.toLowerCase()}handle`}
             className="w-full px-3 py-2 rounded-xl border border-bb-border text-sm focus:outline-none focus:border-bb-primary bg-white"
-            autoFocus
+            autoFocus={!canPickReal}
           />
           <div className="flex gap-2">
             <button
@@ -335,9 +452,11 @@ export function Integrations() {
         <p className="text-sm text-bb-muted mt-1">Social accounts are scoped per brand; creative engines are shared across the whole agency.</p>
       </div>
 
+      <MetaConnectionCard />
+
       <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm">
         <FlaskConical size={15} className="shrink-0" />
-        Demo — social connections are simulated and stored locally. Images stay real even without keys via free providers (Pollinations).
+        Handles typed by hand stay simulated. Instagram accounts assigned through the Meta connection publish for real on schedule.
       </div>
 
       <div>

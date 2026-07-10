@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import crypto from "node:crypto";
 import { attachMedia, db, splitMedia } from "./src/db";
+import { exchangeCode, listIgAccounts, loginUrl, metaConfigured, publishToInstagram, type MetaConnectionRecord } from "./src/meta";
 
 dotenv.config();
 
@@ -396,6 +397,7 @@ Return a JSON object with exactly these fields:
       higgsfield: hasHiggsfieldKey(),
       pollinations: true,
       canvaTemplateUrl: process.env.CANVA_TEMPLATE_URL || null,
+      metaConfigured: metaConfigured(),
     });
   });
 
@@ -665,6 +667,164 @@ Return a JSON object with exactly these fields:
     tx();
     res.json({ ok: true });
   });
+
+  // ================ Meta (Instagram) publishing ================
+
+  const kvGet = <T>(key: string): T | null => {
+    const row = db().prepare("SELECT value FROM kv WHERE key = ?").get(key) as { value: string } | undefined;
+    return row ? (JSON.parse(row.value) as T) : null;
+  };
+  const kvSet = (key: string, value: unknown) =>
+    db().prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .run(key, JSON.stringify(value));
+  const kvDel = (key: string) => db().prepare("DELETE FROM kv WHERE key = ?").run(key);
+
+  const getMetaConnection = () => kvGet<MetaConnectionRecord>("meta_connection");
+
+  app.get("/api/meta/status", (_req, res) => {
+    const conn = getMetaConnection();
+    res.json(conn
+      ? { connected: true, name: conn.name, expiresAt: conn.expiresAt }
+      : { connected: false });
+  });
+
+  app.get("/api/meta/login", (_req, res) => {
+    if (!metaConfigured()) {
+      return res.status(400).send("Set META_APP_ID and META_APP_SECRET first.");
+    }
+    const state = crypto.randomBytes(16).toString("hex");
+    kvSet("meta_oauth_state", { state, createdAt: Date.now() });
+    res.redirect(loginUrl(state));
+  });
+
+  app.get("/api/meta/callback", async (req, res) => {
+    try {
+      const { code, state, error_description } = req.query as Record<string, string>;
+      if (error_description) return res.redirect(`/?meta=error&reason=${encodeURIComponent(error_description)}`);
+      const saved = kvGet<{ state: string; createdAt: number }>("meta_oauth_state");
+      kvDel("meta_oauth_state");
+      if (!code || !saved || saved.state !== state || Date.now() - saved.createdAt > 10 * 60 * 1000) {
+        return res.redirect("/?meta=error&reason=invalid_state");
+      }
+      const conn = await exchangeCode(code);
+      kvSet("meta_connection", conn);
+      res.redirect("/?meta=connected");
+    } catch (err: any) {
+      console.error("Meta callback error:", err.message);
+      res.redirect(`/?meta=error&reason=${encodeURIComponent(err.message)}`);
+    }
+  });
+
+  app.get("/api/meta/accounts", async (_req, res) => {
+    const conn = getMetaConnection();
+    if (!conn) return res.status(401).json({ error: "Meta account not connected." });
+    try {
+      res.json({ accounts: await listIgAccounts(conn.accessToken) });
+    } catch (err: any) {
+      console.error("Meta accounts error:", err.message);
+      res.status(502).json({ error: `Could not list Instagram accounts: ${err.message}` });
+    }
+  });
+
+  app.post("/api/meta/disconnect", (_req, res) => {
+    kvDel("meta_connection");
+    res.json({ ok: true });
+  });
+
+  // Public media route — Meta's servers fetch post media from here.
+  app.get("/media/:key", (req, res) => {
+    const row = db().prepare("SELECT data_url FROM media WHERE key = ?").get(req.params.key) as { data_url: string } | undefined;
+    if (!row) return res.status(404).send("Not found");
+    const match = row.data_url.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!match) return res.status(415).send("Unsupported media encoding");
+    res.setHeader("Content-Type", match[1]);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(Buffer.from(match[2], "base64"));
+  });
+
+  const loadPostRow = (id: string) => {
+    const row = db().prepare("SELECT data FROM posts WHERE id = ?").get(id) as { data: string } | undefined;
+    if (!row) return null;
+    const post = JSON.parse(row.data);
+    const mediaRows = db().prepare("SELECT key, data_url FROM media WHERE post_id = ?").all(id) as { key: string; data_url: string }[];
+    return attachMedia(post, new Map(mediaRows.map(r => [r.key, r.data_url])));
+  };
+
+  const savePostRow = (post: any) => {
+    const { media, strippedPost } = splitMedia(post);
+    const d = db();
+    const tx = d.transaction(() => {
+      d.prepare("UPDATE posts SET data = ? WHERE id = ?").run(JSON.stringify(strippedPost), post.id);
+      d.prepare("DELETE FROM media WHERE post_id = ?").run(post.id);
+      const ins = d.prepare("INSERT INTO media (key, post_id, data_url, created_at) VALUES (?, ?, ?, ?)");
+      const now = new Date().toISOString();
+      for (const m of media) ins.run(m.key, post.id, m.url, now);
+    });
+    tx();
+  };
+
+  const findRealAccount = (post: any) => {
+    const row = db().prepare("SELECT data FROM brands WHERE id = ?").get(post.brandId) as { data: string } | undefined;
+    if (!row) return null;
+    const brand = JSON.parse(row.data);
+    return (brand.socialAccounts ?? []).find((a: any) => a.platform === post.platform && a.igUserId) ?? null;
+  };
+
+  async function publishPost(post: any): Promise<any> {
+    const conn = getMetaConnection();
+    if (!conn) throw new Error("Meta account not connected.");
+    const account = findRealAccount(post);
+    if (!account) throw new Error(`No real Instagram account assigned to this brand for ${post.platform}.`);
+    const result = await publishToInstagram(post, account, conn.accessToken);
+    const updated = {
+      ...post,
+      status: "posted",
+      publishedAt: new Date().toISOString(),
+      permalink: result.permalink,
+      publishError: null,
+    };
+    savePostRow(updated);
+    return updated;
+  }
+
+  app.post("/api/posts/:id/publish", async (req, res) => {
+    const post = loadPostRow(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found." });
+    if (!getMetaConnection()) return res.status(400).json({ error: "Meta account not connected — connect it in Integrations first." });
+    try {
+      res.json({ post: await publishPost(post) });
+    } catch (err: any) {
+      console.error(`Publish failed for post ${post.id}:`, err.message);
+      savePostRow({ ...post, publishError: err.message, publishAttempts: (post.publishAttempts ?? 0) + 1 });
+      res.status(502).json({ error: err.message });
+    }
+  });
+
+  // Auto-publish worker: every 60s, publish due scheduled posts on brands
+  // with a real IG account. Posts without one are left alone (demo behavior).
+  const runScheduler = async () => {
+    if (!metaConfigured() || !getMetaConnection()) return;
+    try {
+      const rows = db().prepare("SELECT id FROM posts").all() as { id: string }[];
+      const now = new Date().toISOString();
+      for (const { id } of rows) {
+        const post = loadPostRow(id);
+        if (!post || post.status !== "scheduled" || post.scheduledAt > now) continue;
+        if ((post.publishAttempts ?? 0) >= 3) continue;
+        if (!findRealAccount(post)) continue;
+        try {
+          await publishPost(post);
+          console.log(`Auto-published post ${id} (${post.platform})`);
+        } catch (err: any) {
+          console.error(`Auto-publish failed for ${id} (attempt ${(post.publishAttempts ?? 0) + 1}/3):`, err.message);
+          savePostRow({ ...post, publishError: err.message, publishAttempts: (post.publishAttempts ?? 0) + 1 });
+        }
+      }
+    } catch (err: any) {
+      console.error("Scheduler tick failed:", err.message);
+    }
+  };
+  setInterval(runScheduler, 60 * 1000);
 
   // Warm the connection so first request is snappy
   db();
