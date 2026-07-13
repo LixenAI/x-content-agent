@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Check, Clapperboard, FlaskConical, KeyRound, Link2, Palette, Plus, Trash2, Zap } from 'lucide-react';
-import type { IntegrationId, MetaIgAccount, Platform, ProviderStatus, SocialAccount } from '../../types';
+import type { GhlSocialAccount, IntegrationId, MetaIgAccount, Platform, ProviderStatus, SocialAccount } from '../../types';
 import { useApp } from '../../state/AppContext';
-import { getMetaAccounts, disconnectMeta } from '../../lib/api';
+import { getMetaAccounts, disconnectMeta, getGhlAccounts } from '../../lib/api';
 import { PlatformIcon, PLATFORM_LABELS } from '../shared';
+
+const GHL_PLATFORM_MAP: Record<string, Platform> = {
+  facebook: 'facebook',
+  instagram: 'instagram',
+  linkedin: 'linkedin',
+  tiktok: 'tiktok',
+};
 
 interface SocialDef {
   platform: Platform;
@@ -52,7 +59,9 @@ function ConnectedAccountRow({ account, onDisconnect }: { account: SocialAccount
       <div className="flex items-center gap-2 min-w-0">
         {account.avatarUrl && <img src={account.avatarUrl} alt="" className="w-5 h-5 rounded-full" />}
         <span className="text-sm font-semibold text-bb-dark truncate">{account.handle}</span>
-        {account.igUserId ? (
+        {account.ghlAccountId ? (
+          <span className="px-1.5 py-0.5 rounded-full bg-sky-50 border border-sky-200 text-sky-700 text-[9px] font-semibold uppercase tracking-wide">GHL</span>
+        ) : account.igUserId ? (
           <span className="px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">Live</span>
         ) : (
           <span className="px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-semibold uppercase tracking-wide">Simulated</span>
@@ -66,6 +75,37 @@ function ConnectedAccountRow({ account, onDisconnect }: { account: SocialAccount
       >
         <Trash2 size={13} />
       </button>
+    </div>
+  );
+}
+
+function GhlConnectionCard() {
+  const { providerStatus } = useApp();
+  const configured = providerStatus.ghlConfigured;
+  return (
+    <div className="bb-card p-5">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${configured ? 'bb-gradient text-white' : 'bg-bb-violet-soft text-bb-primary'}`}>
+          <Zap size={20} />
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <div className="font-heading font-semibold">GoHighLevel Connection <span className="text-xs font-normal text-bb-muted">(agency-wide)</span></div>
+          {configured ? (
+            <div className="text-xs text-bb-success font-medium flex items-center gap-1 mt-0.5">
+              <Check size={11} /> API token detected — link each brand's sub-account below, then assign its connected accounts
+            </div>
+          ) : (
+            <div className="text-xs text-bb-muted mt-0.5">
+              Set <code className="font-mono">GHL_API_TOKEN</code> in the environment (GHL → Settings → Private Integrations; scopes: Social Media Posting + Users). One token covers every platform connected in GHL.
+            </div>
+          )}
+        </div>
+        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold ${
+          configured ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
+        }`}>
+          <KeyRound size={10} /> {configured ? 'API token detected' : 'No token — planner sync off'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -284,14 +324,39 @@ function SocialCard({ def }: { def: SocialDef }) {
 }
 
 function GhlCard() {
-  const { activeBrand, connectGhlSubAccount, disconnectGhlSubAccount, showToast } = useApp();
+  const { activeBrand, connectGhlSubAccount, disconnectGhlSubAccount, connectSocialAccount, providerStatus, showToast } = useApp();
   const [inputOpen, setInputOpen] = useState(false);
   const [subId, setSubId] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [ghlAccounts, setGhlAccounts] = useState<GhlSocialAccount[] | null>(null);
+  const [ghlError, setGhlError] = useState<string | null>(null);
 
   if (!activeBrand) return null;
   const accounts = activeBrand.ghlSubAccounts ?? [];
   const connected = accounts.length > 0;
+  const locationId = accounts[0]?.subAccountId;
+  const canLoadAccounts = providerStatus.ghlConfigured && !!locationId;
+
+  const loadAccounts = async () => {
+    setPickerOpen(true);
+    setGhlError(null);
+    try {
+      setGhlAccounts(await getGhlAccounts(locationId!));
+    } catch (err) {
+      setGhlError(err instanceof Error ? err.message : 'Failed to load GHL accounts');
+    }
+  };
+
+  const assignGhl = (acct: GhlSocialAccount) => {
+    const platform = GHL_PLATFORM_MAP[acct.platform];
+    if (!platform) return;
+    connectSocialAccount(activeBrand.id, platform, `@${acct.name.replace(/^@/, '')}`, acct.name, {
+      ghlAccountId: acct.id,
+      avatarUrl: acct.avatar,
+    });
+    showToast(`${acct.name} assigned to ${activeBrand.name} — posts sync to the GHL planner`);
+  };
 
   const submit = () => {
     if (!subId.trim()) return;
@@ -380,6 +445,54 @@ function GhlCard() {
           <Plus size={14} /> {connected ? 'Add another' : 'Link sub-account'}
         </button>
       )}
+
+      {canLoadAccounts && !pickerOpen && (
+        <button
+          onClick={loadAccounts}
+          className="w-full mt-2 px-3 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 text-sm font-semibold hover:bg-sky-100 transition-colors flex items-center justify-center gap-2"
+        >
+          <Zap size={14} /> Load connected accounts from GHL
+        </button>
+      )}
+      {pickerOpen && (
+        <div className="mt-3 space-y-1.5">
+          <div className="text-[11px] font-semibold text-bb-muted uppercase tracking-wide">Accounts connected in GHL</div>
+          {ghlError && <div className="text-xs text-bb-error bg-red-50 rounded-xl px-3 py-2">{ghlError}</div>}
+          {ghlAccounts === null && !ghlError && (
+            <div className="flex items-center gap-2 text-xs text-bb-muted px-1 py-2"><div className="bb-spinner" /> Loading from GHL…</div>
+          )}
+          {ghlAccounts?.length === 0 && (
+            <div className="text-xs text-bb-muted px-1 py-1">No active social accounts found on this sub-account.</div>
+          )}
+          {(ghlAccounts ?? []).map(acct => {
+            const platform = GHL_PLATFORM_MAP[acct.platform];
+            const alreadyAssigned = (activeBrand.socialAccounts ?? []).some(a => a.ghlAccountId === acct.id);
+            return (
+              <div key={acct.id} className="flex items-center justify-between px-3 py-2 rounded-xl border border-bb-border bg-white">
+                <div className="flex items-center gap-2 min-w-0">
+                  {acct.avatar && <img src={acct.avatar} alt="" className="w-6 h-6 rounded-full" />}
+                  {platform && <PlatformIcon platform={platform} size={13} className="text-bb-muted shrink-0" />}
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{acct.name}</div>
+                    <div className="text-[10px] text-bb-muted capitalize">{acct.platform}</div>
+                  </div>
+                </div>
+                {platform ? (
+                  <button
+                    onClick={() => assignGhl(acct)}
+                    disabled={alreadyAssigned}
+                    className="shrink-0 px-2.5 py-1 rounded-lg bb-gradient text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40"
+                  >
+                    {alreadyAssigned ? 'Assigned' : 'Assign'}
+                  </button>
+                ) : (
+                  <span className="shrink-0 text-[10px] text-bb-muted italic">platform not modeled</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -443,7 +556,7 @@ function CreativeCard({ def }: { def: CreativeDef }) {
 }
 
 export function Integrations() {
-  const { activeBrand } = useApp();
+  const { activeBrand, providerStatus } = useApp();
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -452,11 +565,12 @@ export function Integrations() {
         <p className="text-sm text-bb-muted mt-1">Social accounts are scoped per brand; creative engines are shared across the whole agency.</p>
       </div>
 
-      <MetaConnectionCard />
+      <GhlConnectionCard />
+      {providerStatus.metaConfigured && <MetaConnectionCard />}
 
       <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm">
         <FlaskConical size={15} className="shrink-0" />
-        Handles typed by hand stay simulated. Instagram accounts assigned through the Meta connection publish for real on schedule.
+        Handles typed by hand stay simulated. Accounts assigned from GHL (blue chip) publish for real via the GHL Social Planner.
       </div>
 
       <div>

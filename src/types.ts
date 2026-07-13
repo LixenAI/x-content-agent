@@ -11,9 +11,10 @@ export interface SocialAccount {
   handle: string;         // e.g. "@bloomcoffee"
   displayName: string;    // e.g. "Bloom Coffee Co."
   connectedAt: string;
-  igUserId?: string;      // real IG Business account id (presence ⇒ publishes for real)
-  pageId?: string;        // linked FB Page id
-  avatarUrl?: string;     // profile picture from Graph API
+  igUserId?: string;      // real IG Business account id (direct Meta path)
+  pageId?: string;        // linked FB Page id (direct Meta path)
+  avatarUrl?: string;     // profile picture from the platform
+  ghlAccountId?: string;  // GHL social account id (presence ⇒ publishes via GHL planner)
 }
 
 export interface GhlSubAccount {
@@ -117,6 +118,7 @@ export interface Post {
   permalink?: string;
   publishError?: string | null;
   publishAttempts?: number;
+  ghlPostId?: string;     // set once synced to the GHL Social Planner
 }
 
 export interface AgencySettings {
@@ -146,6 +148,14 @@ export interface ProviderStatus {
   pollinations: boolean;
   canvaTemplateUrl: string | null;
   metaConfigured: boolean;
+  ghlConfigured: boolean;
+}
+
+export interface GhlSocialAccount {
+  id: string;
+  platform: string; // facebook | instagram | linkedin | tiktok | google | twitter ...
+  name: string;
+  avatar?: string;
 }
 
 export interface MetaStatus {

@@ -1,5 +1,5 @@
 import type {
-  AspectRatio, Brand, BrandProfileDraft, Campaign, CaptionVariant,
+  AspectRatio, Brand, BrandProfileDraft, Campaign, CaptionVariant, GhlSocialAccount,
   MetaIgAccount, MetaStatus, Platform, Post, PostFormat, ProviderStatus, ViralityReport,
 } from '../types';
 import { BROLL_CATEGORIES, frameworksPromptBlock, HOOK_FORMULAS, PLATFORM_MATRIX } from './frameworks';
@@ -48,6 +48,16 @@ export async function disconnectMeta(): Promise<void> {
 
 export async function publishNow(postId: string): Promise<Post> {
   const { post } = await request<{ post: Post }>(`/api/posts/${postId}/publish`, { method: 'POST' });
+  return post;
+}
+
+export async function getGhlAccounts(locationId: string): Promise<GhlSocialAccount[]> {
+  const { accounts } = await request<{ accounts: GhlSocialAccount[] }>(`/api/ghl/accounts/${encodeURIComponent(locationId)}`);
+  return accounts;
+}
+
+export async function syncToGhl(postId: string): Promise<Post> {
+  const { post } = await request<{ post: Post }>(`/api/posts/${postId}/sync-ghl`, { method: 'POST' });
   return post;
 }
 

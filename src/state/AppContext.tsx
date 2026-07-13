@@ -20,7 +20,7 @@ const DEFAULT_SETTINGS: AgencySettings = {
 
 const DEFAULT_PROVIDERS: ProviderStatus = {
   gemini: false, kling: false, higgsfield: false, pollinations: true, canvaTemplateUrl: null,
-  metaConfigured: false,
+  metaConfigured: false, ghlConfigured: false,
 };
 
 export interface CampaignProgress {
@@ -78,8 +78,9 @@ interface AppContextValue {
   metaStatus: MetaStatus;
   refreshMetaStatus: () => Promise<void>;
   publishPostNow: (postId: string) => Promise<{ ok: boolean; error?: string }>;
+  syncPostToGhl: (postId: string) => Promise<{ ok: boolean; error?: string }>;
   toggleIntegration: (id: IntegrationId) => void;
-  connectSocialAccount: (brandId: string, platform: Platform, handle: string, displayName?: string, meta?: { igUserId: string; pageId: string; avatarUrl?: string }) => void;
+  connectSocialAccount: (brandId: string, platform: Platform, handle: string, displayName?: string, link?: { igUserId?: string; pageId?: string; avatarUrl?: string; ghlAccountId?: string }) => void;
   disconnectSocialAccount: (brandId: string, accountId: string) => void;
   connectGhlSubAccount: (brandId: string, subAccountId: string, displayName?: string) => void;
   disconnectGhlSubAccount: (brandId: string, accountId: string) => void;
@@ -331,14 +332,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setBrands(prev => prev.map(b => (b.id === id ? { ...b, ...patch } : b)));
   }, []);
 
-  const connectSocialAccount = useCallback((brandId: string, platform: Platform, handle: string, displayName?: string, meta?: { igUserId: string; pageId: string; avatarUrl?: string }) => {
+  const connectSocialAccount = useCallback((brandId: string, platform: Platform, handle: string, displayName?: string, link?: { igUserId?: string; pageId?: string; avatarUrl?: string; ghlAccountId?: string }) => {
     const account: SocialAccount = {
       id: store.uid(),
       platform,
       handle: handle.startsWith('@') ? handle : `@${handle}`,
       displayName: displayName || handle.replace(/^@/, ''),
       connectedAt: new Date().toISOString(),
-      ...(meta ? { igUserId: meta.igUserId, pageId: meta.pageId, avatarUrl: meta.avatarUrl } : {}),
+      ...(link ?? {}),
     };
     setBrands(prev => prev.map(b => (b.id === brandId
       ? { ...b, socialAccounts: [...(b.socialAccounts ?? []), account] }
@@ -611,6 +612,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [showToast, updatePost]);
 
+  const syncPostToGhl = useCallback(async (postId: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const updated = await api.syncToGhl(postId);
+      setPosts(prev => prev.map(p => (p.id === postId ? { ...p, ...updated } : p)));
+      showToast('Sent to the GHL Social Planner 🚀');
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'GHL sync failed';
+      updatePost(postId, { publishError: message });
+      return { ok: false, error: message };
+    }
+  }, [showToast, updatePost]);
+
   const toggleIntegration = useCallback((id: IntegrationId) => {
     setIntegrations(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   }, []);
@@ -643,7 +657,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleIntegration, updateSettings, resetData,
     connectSocialAccount, disconnectSocialAccount,
     connectGhlSubAccount, disconnectGhlSubAccount,
-    metaStatus, refreshMetaStatus, publishPostNow,
+    metaStatus, refreshMetaStatus, publishPostNow, syncPostToGhl,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

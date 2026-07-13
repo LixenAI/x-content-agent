@@ -27,7 +27,17 @@ Images generate for free even with zero configuration. Video falls back to an an
 
 React 19 + Vite + Tailwind 4 frontend, Express server proxying the AI providers, localStorage persistence. No auth, no database, no real social posting — demo-quality build.
 
-## Real Instagram publishing (one Meta connection)
+## Publish via GoHighLevel (recommended)
+
+If your social platforms are already connected in GoHighLevel, one Private Integration Token makes the app publish everywhere through the **GHL Social Planner** — no per-platform OAuth needed.
+
+1. GHL → Settings → **Private Integrations** → create a token with scopes **Social Media Posting** (read/write) and **Users** (read). Put it in env as `GHL_API_TOKEN`.
+2. In the app: Integrations → GoHighLevel card → **Link sub-account** with the brand's location ID, then **Load connected accounts from GHL** and **Assign** the accounts (Facebook / Instagram / LinkedIn / TikTok) to the brand. Assigned accounts show a blue **GHL** chip.
+3. Done. Approved (scheduled) posts are pushed into the GHL planner up to 24 hours ahead by the background worker — GHL then publishes them at the exact scheduled time. There's also a **Send to GHL Planner** button in the post editor.
+
+GHL fetches post media by URL, so the same rule applies as for Meta: the app must be deployed at a public https `APP_URL` (Render works great).
+
+## Real Instagram publishing — direct Meta (alternative)
 
 The app can publish Instagram posts for real — one agency-level Meta login unlocks every Facebook Page + Instagram Business account you admin, and you assign each one to a brand.
 

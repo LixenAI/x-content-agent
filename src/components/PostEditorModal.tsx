@@ -11,22 +11,33 @@ import { VariantsPanel } from './editor/VariantsPanel';
 const inputCls = 'w-full px-3 py-2 rounded-xl border border-bb-border text-sm focus:outline-none focus:border-bb-primary bg-white';
 
 export function PostEditorModal({ postId, onClose }: { postId: string; onClose: () => void }) {
-  const { posts, brands, updatePost, deletePost, generatePostImage, rewriteCaption, publishPostNow, metaStatus, showToast } = useApp();
+  const { posts, brands, updatePost, deletePost, generatePostImage, rewriteCaption, publishPostNow, syncPostToGhl, metaStatus, providerStatus, showToast } = useApp();
   const post = posts.find(p => p.id === postId);
   const brand = brands.find(b => b.id === post?.brandId);
   const [rewriting, setRewriting] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   if (!post) return null;
 
   const realAccount = (brand?.socialAccounts ?? []).find(a => a.platform === post.platform && a.igUserId);
   const canPublishNow = !!realAccount && metaStatus.connected && post.status !== 'posted';
+  const hasGhlTarget = providerStatus.ghlConfigured
+    && (brand?.ghlSubAccounts?.length ?? 0) > 0
+    && (brand?.socialAccounts ?? []).some(a => a.ghlAccountId);
+  const canSyncGhl = hasGhlTarget && !post.ghlPostId && post.status !== 'posted';
 
   const doPublish = async () => {
     setPublishing(true);
     await publishPostNow(post.id);
     setPublishing(false);
+  };
+
+  const doSyncGhl = async () => {
+    setSyncing(true);
+    await syncPostToGhl(post.id);
+    setSyncing(false);
   };
 
   const localDateTime = (() => {
@@ -174,6 +185,22 @@ export function PostEditorModal({ postId, onClose }: { postId: string; onClose: 
             <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-bb-error text-xs">
               Publish failed: {post.publishError}
             </div>
+          )}
+          {post.ghlPostId && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 text-sm font-medium">
+              <CheckCircle2 size={14} /> In the GHL Social Planner <span className="text-xs font-mono text-sky-600/70 truncate">#{post.ghlPostId}</span>
+            </div>
+          )}
+          {canSyncGhl && (
+            <button
+              onClick={doSyncGhl}
+              disabled={syncing}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
+            >
+              {syncing
+                ? <><RefreshCw size={14} className="animate-spin" /> Sending to GHL Planner…</>
+                : <><Send size={14} /> Send to GHL Planner</>}
+            </button>
           )}
           {canPublishNow && (
             <button

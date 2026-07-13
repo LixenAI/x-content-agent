@@ -5,6 +5,7 @@ import cors from "cors";
 import crypto from "node:crypto";
 import { attachMedia, db, splitMedia } from "./src/db";
 import { exchangeCode, listIgAccounts, loginUrl, metaConfigured, publishToInstagram, type MetaConnectionRecord } from "./src/meta";
+import { createPlannerPost, ghlConfigured, listSocialAccounts as listGhlAccounts } from "./src/ghl";
 
 dotenv.config();
 
@@ -398,6 +399,7 @@ Return a JSON object with exactly these fields:
       pollinations: true,
       canvaTemplateUrl: process.env.CANVA_TEMPLATE_URL || null,
       metaConfigured: metaConfigured(),
+      ghlConfigured: ghlConfigured(),
     });
   });
 
@@ -800,31 +802,106 @@ Return a JSON object with exactly these fields:
     }
   });
 
-  // Auto-publish worker: every 60s, publish due scheduled posts on brands
-  // with a real IG account. Posts without one are left alone (demo behavior).
-  const runScheduler = async () => {
-    if (!metaConfigured() || !getMetaConnection()) return;
+  // ---- GoHighLevel Social Planner ----
+
+  const loadBrandRow = (brandId: string) => {
+    const row = db().prepare("SELECT data FROM brands WHERE id = ?").get(brandId) as { data: string } | undefined;
+    return row ? JSON.parse(row.data) : null;
+  };
+
+  // The brand's GHL location + the account ids a post should go to: prefer
+  // accounts matching the post's platform, else all GHL-linked accounts
+  // (cross-posting is normal in the planner).
+  const ghlTargetsFor = (post: any): { locationId: string; accountIds: string[] } | null => {
+    const brand = loadBrandRow(post.brandId);
+    const locationId = brand?.ghlSubAccounts?.[0]?.subAccountId;
+    if (!locationId) return null;
+    const linked = (brand.socialAccounts ?? []).filter((a: any) => a.ghlAccountId);
+    if (linked.length === 0) return null;
+    const matching = linked.filter((a: any) => a.platform === post.platform);
+    const accountIds = (matching.length ? matching : linked).map((a: any) => a.ghlAccountId);
+    return { locationId, accountIds };
+  };
+
+  app.get("/api/ghl/accounts/:locationId", async (req, res) => {
+    if (!ghlConfigured()) return res.status(401).json({ error: "Set GHL_API_TOKEN first — see README." });
     try {
-      const rows = db().prepare("SELECT id FROM posts").all() as { id: string }[];
-      const now = new Date().toISOString();
-      for (const { id } of rows) {
-        const post = loadPostRow(id);
-        if (!post || post.status !== "scheduled" || post.scheduledAt > now) continue;
-        if ((post.publishAttempts ?? 0) >= 3) continue;
-        if (!findRealAccount(post)) continue;
+      res.json({ accounts: await listGhlAccounts(req.params.locationId) });
+    } catch (err: any) {
+      console.error("GHL accounts error:", err.message);
+      res.status(502).json({ error: `Could not list GHL accounts: ${err.message}` });
+    }
+  });
+
+  async function syncPostToGhl(post: any): Promise<any> {
+    const targets = ghlTargetsFor(post);
+    if (!targets) throw new Error("Link a GHL sub-account to this brand and assign at least one GHL social account first.");
+    const result = await createPlannerPost(post, targets.locationId, targets.accountIds);
+    const updated = {
+      ...post,
+      ghlPostId: result.ghlPostId,
+      publishError: null,
+      ...(result.publishedNow ? { status: "posted", publishedAt: new Date().toISOString() } : {}),
+    };
+    savePostRow(updated);
+    return updated;
+  }
+
+  app.post("/api/posts/:id/sync-ghl", async (req, res) => {
+    if (!ghlConfigured()) return res.status(400).json({ error: "Set GHL_API_TOKEN first — see README." });
+    const post = loadPostRow(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found." });
+    if (post.ghlPostId) return res.status(409).json({ error: "Already in the GHL planner.", post });
+    try {
+      res.json({ post: await syncPostToGhl(post) });
+    } catch (err: any) {
+      console.error(`GHL sync failed for post ${post.id}:`, err.message);
+      savePostRow({ ...post, publishError: err.message, publishAttempts: (post.publishAttempts ?? 0) + 1 });
+      res.status(502).json({ error: err.message });
+    }
+  });
+
+  // Auto-publish worker, every 60s. GHL branch first: approved posts due
+  // within 24h are pushed into the GHL planner ahead of time (GHL owns the
+  // exact-time publishing). Direct-Meta branch handles the rest. Both are
+  // dormant unless configured — demo mode never logs errors.
+  const runScheduler = async () => {
+    if (!ghlConfigured() && !(metaConfigured() && getMetaConnection())) return; // fully dormant in demo mode
+    const rows = db().prepare("SELECT id FROM posts").all() as { id: string }[];
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    const horizonIso = new Date(now + 24 * 3600 * 1000).toISOString();
+
+    for (const { id } of rows) {
+      const post = loadPostRow(id);
+      if (!post || post.status !== "scheduled" || (post.publishAttempts ?? 0) >= 3) continue;
+
+      // Branch 1: GHL planner sync (24h ahead)
+      if (ghlConfigured() && !post.ghlPostId && post.scheduledAt <= horizonIso && ghlTargetsFor(post)) {
+        try {
+          await syncPostToGhl(post);
+          console.log(`Synced post ${id} (${post.platform}) to GHL planner`);
+        } catch (err: any) {
+          console.error(`GHL sync failed for ${id} (attempt ${(post.publishAttempts ?? 0) + 1}/3):`, err.message);
+          savePostRow({ ...post, publishError: err.message, publishAttempts: (post.publishAttempts ?? 0) + 1 });
+        }
+        continue;
+      }
+      if (post.ghlPostId) continue; // GHL owns it from here
+
+      // Branch 2: direct Meta publish at due time
+      if (metaConfigured() && getMetaConnection() && post.scheduledAt <= nowIso && findRealAccount(post)) {
         try {
           await publishPost(post);
-          console.log(`Auto-published post ${id} (${post.platform})`);
+          console.log(`Auto-published post ${id} (${post.platform}) via Meta`);
         } catch (err: any) {
           console.error(`Auto-publish failed for ${id} (attempt ${(post.publishAttempts ?? 0) + 1}/3):`, err.message);
           savePostRow({ ...post, publishError: err.message, publishAttempts: (post.publishAttempts ?? 0) + 1 });
         }
       }
-    } catch (err: any) {
-      console.error("Scheduler tick failed:", err.message);
     }
   };
-  setInterval(runScheduler, 60 * 1000);
+  setInterval(() => { runScheduler().catch(err => console.error("Scheduler tick failed:", err.message)); }, 60 * 1000);
 
   // Warm the connection so first request is snappy
   db();
