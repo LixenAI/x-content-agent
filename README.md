@@ -46,6 +46,20 @@ The app can publish Instagram posts for real — one agency-level Meta login unl
 
 **Important:** Meta fetches your post images from `{APP_URL}/media/:key`, so real publishing only works when the app is deployed at a public https URL (Render works great) — on localhost, publish attempts fail with a clear message.
 
+## Deploy to Render
+
+The included `render.yaml` blueprint provisions a Web Service on the Starter plan with a 1 GB persistent disk mounted at `/data`, so SQLite (brands, campaigns, posts, Meta tokens) survives redeploys.
+
+1. Push to GitHub, then Render → **New → Blueprint** → point at the repo. Render reads `render.yaml` and creates the service.
+2. First deploy boots with empty secrets. Grab the service URL (`https://<name>.onrender.com`), then Render dashboard → **Environment** and fill in:
+   - `APP_URL` = the service URL (no trailing slash) — used for OAuth callbacks and the `/media/:key` links Meta fetches.
+   - `GEMINI_API_KEY`, `KLING_ACCESS_KEY`, `KLING_SECRET_KEY`, `HIGGSFIELD_API_KEY` (optional but recommended)
+   - `META_APP_ID`, `META_APP_SECRET` (for real Instagram publishing)
+3. In your Meta Developer Portal app, add `{APP_URL}/api/meta/callback` to the OAuth Redirect URIs.
+4. Save env vars → Render redeploys automatically → open the URL → Integrations → **Connect Meta account**.
+
+**Cost:** Starter is $7/mo; the 1 GB disk is $0.25/mo — about **$7.25/mo total**. The free tier can't be used because it has no persistent disk and spins the service down after 15 min (both would break the SQLite state and the 60-second auto-publish worker).
+
 ## Run locally
 
 **Prerequisites:** Node.js

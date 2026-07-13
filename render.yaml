@@ -1,0 +1,41 @@
+# Render blueprint. Import via https://dashboard.render.com → New → Blueprint.
+# Creates a Web Service on the Starter plan with a 1 GB persistent disk so
+# SQLite (brands / campaigns / posts / Meta tokens) survives redeploys.
+services:
+  - type: web
+    name: content-pro-agent
+    runtime: node
+    plan: starter
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/server.mjs
+    healthCheckPath: /api/providers
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # DB_PATH lives on the persistent disk (mounted below) so restarts and
+      # redeploys don't wipe data.
+      - key: DB_PATH
+        value: /data/data.db
+      # sync: false = "set in the Render dashboard after first deploy",
+      # keeping secrets out of git.
+      - key: APP_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: KLING_ACCESS_KEY
+        sync: false
+      - key: KLING_SECRET_KEY
+        sync: false
+      - key: HIGGSFIELD_API_KEY
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: CANVA_TEMPLATE_URL
+        sync: false
+    disk:
+      name: content-pro-data
+      mountPath: /data
+      sizeGB: 1
