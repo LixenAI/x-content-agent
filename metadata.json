@@ -1,6 +1,6 @@
 {
-  "name": "RX-Content-Agent",
-  "description": "",
+  "name": "Content Pro Agent",
+  "description": "AI content studio — learn a brand from its website, then generate campaigns of posts, carousels, and AI videos using proven hook formulas and script frameworks, with virality prediction and multi-provider media generation (Gemini, Pollinations, Kling, Higgsfield, Veo).",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
