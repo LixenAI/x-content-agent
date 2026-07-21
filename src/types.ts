@@ -37,6 +37,7 @@ export interface Brand {
   createdAt: string;
   socialAccounts: SocialAccount[];    // per-brand social connections
   ghlSubAccounts?: GhlSubAccount[];   // per-brand GoHighLevel sub-accounts
+  logoUrl?: string;                   // data URL, stamped onto every generated image as a watermark
 }
 
 export interface FormatMix {
@@ -139,6 +140,7 @@ export interface BrandProfileDraft {
   audience: string;
   topics: string[];
   colors: string[];
+  logoUrl?: string;
 }
 
 export interface ProviderStatus {
