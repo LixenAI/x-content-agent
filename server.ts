@@ -188,7 +188,10 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(cors());
-  app.use(express.json());
+  // Posts/carousels/brands carry base64 image data URLs (generated images,
+  // watermark-composited PNGs, uploaded logos) well past Express's 100kb
+  // default — raise the limit so those PUTs don't 413.
+  app.use(express.json({ limit: "25mb" }));
 
   // API Route for Gemini Text
   app.post("/api/generate-text", async (req, res) => {

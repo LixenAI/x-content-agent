@@ -57,7 +57,11 @@ export async function applyWatermark(imageUrl: string, logoUrl: string): Promise
     ctx.drawImage(logo, boxX + pad, boxY + pad, logoW, logoH);
     ctx.globalAlpha = 1;
 
-    return canvas.toDataURL('image/png');
+    // JPEG, not PNG: the canvas is a fully-opaque photo composite (no
+    // transparency to preserve), and PNG's lossless encoding of photographic
+    // content runs 5-10x larger — enough to trip the server's JSON body
+    // limit on saves.
+    return canvas.toDataURL('image/jpeg', 0.9);
   } catch {
     return imageUrl;
   }
