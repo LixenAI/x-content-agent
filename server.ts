@@ -7,7 +7,10 @@ import { attachMedia, db, splitMedia } from "./src/db";
 import { exchangeCode, listIgAccounts, loginUrl, metaConfigured, publishToInstagram, type MetaConnectionRecord } from "./src/meta";
 import { createPlannerPost, ghlConfigured, listSocialAccounts as listGhlAccounts } from "./src/ghl";
 
+// .env.local (documented in README as the local-dev file) takes precedence
+// over .env; load .env first so .env.local's values win on overlap.
 dotenv.config();
+dotenv.config({ path: ".env.local", override: true });
 
 const hasGeminiKey = () => !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY";
 const hasKlingKeys = () => !!process.env.KLING_ACCESS_KEY && !!process.env.KLING_SECRET_KEY;
@@ -208,7 +211,7 @@ async function startServer() {
       const ai = new GoogleGenAI({ apiKey });
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-flash-latest",
         contents: prompt,
       });
 
@@ -294,7 +297,7 @@ async function startServer() {
       const ai = new GoogleGenAI({ apiKey });
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-flash-latest",
         contents: `Analyze this website content and extract a brand profile for social media marketing.
 
 ${siteSummary}
