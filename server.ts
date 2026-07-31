@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { attachMedia, db, splitMedia } from "./src/db";
 import { exchangeCode, listIgAccounts, loginUrl, metaConfigured, publishToInstagram, type MetaConnectionRecord } from "./src/meta";
 import { createPlannerPost, ghlConfigured, listSocialAccounts as listGhlAccounts } from "./src/ghl";
+import { authConfigured, isAuthed, login, logout, requireAuth } from "./src/auth";
 
 // .env.local (documented in README as the local-dev file) takes precedence
 // over .env; load .env first so .env.local's values win on overlap.
@@ -190,11 +191,40 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(cors());
+  // Credentialed same-origin requests only: the session cookie must not be
+  // readable by arbitrary origins, and the SPA is served from this same origin.
+  app.use(cors({ origin: true, credentials: true }));
   // Posts/carousels/brands carry base64 image data URLs (generated images,
   // watermark-composited PNGs, uploaded logos) well past Express's 100kb
   // default — raise the limit so those PUTs don't 413.
   app.use(express.json({ limit: "25mb" }));
+
+  // ---------- Auth (must be registered before the gate below) ----------
+
+  // Unauthenticated liveness probe for the platform health check. Deliberately
+  // says nothing about configuration — /api/providers is behind the gate.
+  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+  app.get("/api/auth/status", (req, res) => {
+    res.json({ authConfigured: authConfigured(), authenticated: authConfigured() ? isAuthed(req) : true });
+  });
+
+  app.post("/api/auth/login", (req, res) => {
+    if (!authConfigured()) return res.status(400).json({ error: "Login is not configured on this server." });
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!login(res, password)) return res.status(401).json({ error: "Incorrect password." });
+    res.json({ ok: true });
+  });
+
+  app.post("/api/auth/logout", (_req, res) => {
+    logout(res);
+    res.json({ ok: true });
+  });
+
+  // Everything below /api requires a session. Registered here so every route
+  // defined later inherits it by default — new endpoints are protected unless
+  // someone deliberately mounts them above this line.
+  app.use("/api", requireAuth);
 
   // API Route for Gemini Text
   app.post("/api/generate-text", async (req, res) => {
