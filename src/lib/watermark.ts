@@ -1,5 +1,7 @@
-// Stamps a brand's logo onto a generated image, bottom-right, on a soft white
-// pill for contrast against any background. Runs entirely in-browser via
+// Stamps a brand's logo onto a generated image, bottom-right, with no plate
+// behind it — the logo's own transparency is preserved so it reads as part of
+// the image rather than a pasted-on sticker. A soft shadow keeps the mark from
+// dissolving into busy or same-tone backgrounds. Runs entirely in-browser via
 // canvas — no server dependency. Data-URL inputs (the normal case: Pollinations
 // and Gemini both return base64 images, and uploaded logos are read as data
 // URLs) never taint the canvas, so toDataURL() always succeeds for the
@@ -15,14 +17,20 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+// Mean perceptual luminance of the area the logo will cover, sampled from the
+// already-drawn base image. Every pixel is read once at watermark time, so the
+// cost is negligible next to decoding the image itself.
+function isRegionDark(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): boolean {
+  try {
+    const { data } = ctx.getImageData(x, y, w, h);
+    let total = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      total += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+    }
+    return total / (data.length / 4) < 128;
+  } catch {
+    return false; // getImageData throws on a tainted canvas; assume light.
+  }
 }
 
 export async function applyWatermark(imageUrl: string, logoUrl: string): Promise<string> {
@@ -36,26 +44,24 @@ export async function applyWatermark(imageUrl: string, logoUrl: string): Promise
 
     ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
 
-    const margin = Math.round(canvas.width * 0.035);
-    const logoW = Math.max(56, Math.round(canvas.width * 0.14));
+    const margin = Math.round(canvas.width * 0.045);
+    const logoW = Math.max(56, Math.round(canvas.width * 0.13));
     const logoH = Math.round(logoW * (logo.naturalHeight / logo.naturalWidth));
-    const pad = Math.round(logoW * 0.16);
-    const boxW = logoW + pad * 2;
-    const boxH = logoH + pad * 2;
-    const boxX = canvas.width - boxW - margin;
-    const boxY = canvas.height - boxH - margin;
-    const radius = Math.round(boxH * 0.22);
+    const logoX = canvas.width - logoW - margin;
+    const logoY = canvas.height - logoH - margin;
 
     ctx.save();
-    ctx.globalAlpha = 0.88;
-    ctx.fillStyle = '#ffffff';
-    roundRectPath(ctx, boxX, boxY, boxW, boxH, radius);
-    ctx.fill();
+    // Diffuse shadow rather than a solid plate: lifts the mark off the
+    // background without boxing it in. A dark shadow is invisible against a
+    // dark background, so pick the shadow tone from what's actually behind
+    // the logo — the mark's own colours stay untouched either way.
+    ctx.shadowColor = isRegionDark(ctx, logoX, logoY, logoW, logoH)
+      ? 'rgba(255, 255, 255, 0.45)'
+      : 'rgba(0, 0, 0, 0.30)';
+    ctx.shadowBlur = Math.round(logoW * 0.10);
+    ctx.globalAlpha = 0.95;
+    ctx.drawImage(logo, logoX, logoY, logoW, logoH);
     ctx.restore();
-
-    ctx.globalAlpha = 0.97;
-    ctx.drawImage(logo, boxX + pad, boxY + pad, logoW, logoH);
-    ctx.globalAlpha = 1;
 
     // JPEG, not PNG: the canvas is a fully-opaque photo composite (no
     // transparency to preserve), and PNG's lossless encoding of photographic
