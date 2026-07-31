@@ -7,7 +7,10 @@ services:
     runtime: node
     plan: starter
     autoDeploy: true
-    buildCommand: npm ci && npm run build
+    # --include=dev is required: NODE_ENV=production (below) makes npm omit
+    # devDependencies, and the build needs esbuild from there to bundle the
+    # server. Without it the build dies on "esbuild: not found".
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node dist/server.mjs
     healthCheckPath: /api/providers
     envVars:
