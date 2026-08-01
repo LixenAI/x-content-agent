@@ -129,16 +129,40 @@ body {
    Frosted glass tile — tier 3
    -------------------------------------------------------------------------- */
 
+/* Beveled glass slab: bright top/left specular, cool inner bottom edge
+   (thickness), colored under-glow, plus an outer rim ring for the
+   double-edged slab look from the reference renders. */
 .hl-glass {
   position: relative;
-  background: var(--hl-glass-bg);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0.48) 55%,
+    rgba(224, 240, 255, 0.58) 100%
+  );
   -webkit-backdrop-filter: blur(var(--hl-glass-blur));
   backdrop-filter: blur(var(--hl-glass-blur));
   border-radius: var(--hl-glass-radius);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-top-color: var(--hl-glass-border);
-  border-left-color: var(--hl-glass-border);
-  box-shadow: var(--hl-glass-shadow), var(--hl-glass-underglow);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  border-left-color: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -4px 10px rgba(147, 197, 253, 0.42),
+    inset 3px 0 6px rgba(255, 255, 255, 0.35),
+    inset -3px 0 9px rgba(147, 197, 253, 0.28),
+    0 16px 38px rgba(37, 99, 235, 0.16),
+    0 30px 60px -22px rgba(34, 211, 238, 0.42);
+}
+
+.hl-glass::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: calc(var(--hl-glass-radius) + 6px);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.2), inset 0 0 14px rgba(255, 255, 255, 0.3);
+  pointer-events: none;
 }
 
 .hl-glass--tight {
@@ -525,6 +549,99 @@ body {
   border-radius: 50%;
   background: radial-gradient(circle at 32% 28%, #ffffff 0%, var(--hl-secondary) 55%, var(--hl-primary) 100%);
   box-shadow: 0 0 14px rgba(34, 211, 238, 0.9), 0 0 4px rgba(255, 255, 255, 0.9);
+}
+
+/* --------------------------------------------------------------------------
+   Extruded display headline — white bevel + cool extrusion + ambient glow
+   -------------------------------------------------------------------------- */
+
+.hl-display-3d {
+  filter: drop-shadow(0 1.5px 0 rgba(255, 255, 255, 0.95))
+    drop-shadow(0 4px 0 rgba(163, 191, 232, 0.6))
+    drop-shadow(0 16px 26px rgba(27, 42, 107, 0.3));
+}
+
+/* --------------------------------------------------------------------------
+   Freestanding 3D icon (gradient-filled SVG) — glow + grounded shadow
+   -------------------------------------------------------------------------- */
+
+.hl-icon3d {
+  flex: none;
+  filter: drop-shadow(0 3px 3px rgba(255, 255, 255, 0.6))
+    drop-shadow(0 12px 20px rgba(37, 99, 235, 0.38));
+}
+
+/* --------------------------------------------------------------------------
+   Floating validation pill — glass pill with a glossy circular badge
+   -------------------------------------------------------------------------- */
+
+.hl-pill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.45em 1.25em 0.45em 0.5em;
+  border-radius: 999px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(234, 245, 255, 0.78) 100%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 6px rgba(147, 197, 253, 0.4),
+    0 12px 26px rgba(37, 99, 235, 0.22);
+  font-family: var(--hl-font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--hl-navy);
+  white-space: nowrap;
+}
+
+.hl-pill-badge {
+  display: grid;
+  place-items: center;
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  flex: none;
+  background: linear-gradient(150deg, #67e8f9 0%, #22d3ee 45%, #2563eb 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(20, 32, 90, 0.4),
+    0 5px 12px rgba(37, 99, 235, 0.4);
+}
+
+.hl-pill-badge svg {
+  width: 58%;
+  height: 58%;
+  stroke: #ffffff;
+  fill: none;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hl-pill-badge--green {
+  background: linear-gradient(150deg, #6ee7b7 0%, #10b981 55%, #059669 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(4, 78, 56, 0.45),
+    0 5px 12px rgba(16, 185, 129, 0.4);
+}
+
+.hl-pill-badge--gold {
+  background: linear-gradient(150deg, #fcd34d 0%, #f59e0b 55%, #d97706 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(146, 64, 14, 0.45),
+    0 5px 12px rgba(245, 158, 11, 0.4);
+}
+
+.hl-pill-badge--violet {
+  background: linear-gradient(150deg, #c4b5fd 0%, #8b7cf6 55%, #7367f0 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(62, 48, 158, 0.45),
+    0 5px 12px rgba(115, 103, 240, 0.4);
 }
 
 /* Floating glass cube (rotated square) accent */
