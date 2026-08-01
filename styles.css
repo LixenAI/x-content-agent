@@ -1,0 +1,673 @@
+/* ==========================================================================
+   LixenAI "Hologlass" design system — shared stylesheet
+   Light ice-blue canvas, frosted glass tiles, glow/bloom, connector lines.
+   Tokens sourced from the lixen-futuristic-design skill (design-dna).
+   ========================================================================== */
+
+:root {
+  /* Color */
+  --hl-bg: #f4f8fd;
+  --hl-bg-top: #ffffff;
+  --hl-bg-mid: #f4f8fd;
+  --hl-bg-deep: #dcebfa;
+  --hl-bg-warm: #fdebdd;
+  --hl-primary: #2563eb;
+  --hl-secondary: #22d3ee;
+  --hl-navy: #1b2a6b;
+  --hl-gold: #f59e0b;
+  --hl-body: #3b4a7a;
+
+  /* Glass tile */
+  --hl-glass-bg: rgba(255, 255, 255, 0.55);
+  --hl-glass-border: rgba(255, 255, 255, 0.7);
+  --hl-glass-blur: 20px;
+  --hl-glass-radius: 24px;
+  --hl-glass-shadow: 0 12px 32px rgba(37, 99, 235, 0.14);
+  --hl-glass-underglow: 0 24px 48px -18px rgba(34, 211, 238, 0.35);
+
+  /* Type */
+  --hl-font-display: "Montserrat", "Archivo", sans-serif;
+  --hl-font-body: "Inter", sans-serif;
+
+  /* Motion */
+  --hl-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--hl-font-body);
+  font-weight: 500;
+  color: var(--hl-body);
+  background-color: var(--hl-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Layered mesh-gradient canvas — tier 1 of the signature stack */
+.hl-canvas {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 0%, var(--hl-bg-top) 0%, var(--hl-bg-mid) 46%, var(--hl-bg-deep) 100%),
+    var(--hl-bg);
+}
+.hl-canvas::before,
+.hl-canvas::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(90px);
+  z-index: 0;
+}
+.hl-canvas::before {
+  width: 44%;
+  height: 34%;
+  left: -12%;
+  bottom: -10%;
+  background: radial-gradient(circle, rgba(253, 235, 221, 0.75), transparent 70%);
+}
+.hl-canvas::after {
+  width: 40%;
+  height: 30%;
+  right: -10%;
+  top: -8%;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.22), transparent 70%);
+}
+
+/* --------------------------------------------------------------------------
+   Typography
+   -------------------------------------------------------------------------- */
+
+.hl-heading {
+  font-family: var(--hl-font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--hl-navy);
+  line-height: 1.04;
+  letter-spacing: 0.01em;
+}
+
+.hl-kicker {
+  font-family: var(--hl-font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.32em;
+  font-size: 0.72rem;
+  color: var(--hl-primary);
+}
+
+.hl-sub {
+  font-family: var(--hl-font-body);
+  font-weight: 500;
+  color: var(--hl-body);
+  line-height: 1.6;
+}
+
+/* Emphasis keywords — animated blue→cyan gradient fill */
+.hl-gradient-text {
+  background: linear-gradient(100deg, var(--hl-primary) 0%, var(--hl-secondary) 50%, var(--hl-primary) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: hl-gradient-shift 5s var(--hl-ease) infinite;
+}
+
+@keyframes hl-gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* --------------------------------------------------------------------------
+   Frosted glass tile — tier 3
+   -------------------------------------------------------------------------- */
+
+/* Beveled glass slab: bright top/left specular, cool inner bottom edge
+   (thickness), colored under-glow, plus an outer rim ring for the
+   double-edged slab look from the reference renders. */
+.hl-glass {
+  position: relative;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0.48) 55%,
+    rgba(224, 240, 255, 0.58) 100%
+  );
+  -webkit-backdrop-filter: blur(var(--hl-glass-blur));
+  backdrop-filter: blur(var(--hl-glass-blur));
+  border-radius: var(--hl-glass-radius);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  border-left-color: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -4px 10px rgba(147, 197, 253, 0.42),
+    inset 3px 0 6px rgba(255, 255, 255, 0.35),
+    inset -3px 0 9px rgba(147, 197, 253, 0.28),
+    0 16px 38px rgba(37, 99, 235, 0.16),
+    0 30px 60px -22px rgba(34, 211, 238, 0.42);
+}
+
+.hl-glass::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: calc(var(--hl-glass-radius) + 6px);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.2), inset 0 0 14px rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+
+.hl-glass--tight {
+  --hl-glass-radius: 20px;
+}
+
+/* --------------------------------------------------------------------------
+   Badges & chips
+   -------------------------------------------------------------------------- */
+
+.hl-num-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1em;
+  height: 2.1em;
+  border-radius: 50%;
+  font-family: var(--hl-font-display);
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(140deg, var(--hl-primary), var(--hl-secondary));
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.hl-num-badge--gold {
+  background: linear-gradient(140deg, var(--hl-gold), #fbbf24);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.hl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.42em 1.05em;
+  border-radius: 999px;
+  font-family: var(--hl-font-display);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hl-primary);
+  background: rgba(255, 255, 255, 0.65);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+}
+
+.hl-chip--cyan {
+  color: #0e7490;
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+.hl-chip .hl-chip-dot {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+
+.hl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.85em 1.8em;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--hl-font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: transform 0.4s var(--hl-ease), box-shadow 0.4s var(--hl-ease);
+}
+
+.hl-btn--primary {
+  color: #ffffff;
+  background: linear-gradient(120deg, var(--hl-primary), var(--hl-secondary));
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.hl-btn--ghost {
+  color: var(--hl-primary);
+  background: rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.12);
+}
+
+.hl-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   Connector-line network — tier 2 (apply to SVG paths / circles)
+   -------------------------------------------------------------------------- */
+
+.hl-connector {
+  fill: none;
+  stroke: url(#hl-connector-grad);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 6 10;
+  animation: hl-dash-flow 3.2s linear infinite;
+}
+
+@keyframes hl-dash-flow {
+  to { stroke-dashoffset: -64; }
+}
+
+.hl-node {
+  fill: var(--hl-secondary);
+  animation: hl-node-pulse 2.4s var(--hl-ease) infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@keyframes hl-node-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.45); }
+}
+
+/* --------------------------------------------------------------------------
+   Entrance motion — tiles float-up + scale-in, staggered radially
+   -------------------------------------------------------------------------- */
+
+.hl-enter {
+  opacity: 0;
+  transform: translateY(26px) scale(0.96);
+  animation: hl-float-in 0.9s var(--hl-ease) forwards;
+  animation-delay: var(--hl-delay, 0s);
+}
+
+@keyframes hl-float-in {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hl-float {
+  animation: hl-hover-float 6s ease-in-out infinite;
+  animation-delay: var(--hl-delay, 0s);
+}
+
+/* Combining both on one element: run the entrance, then keep floating */
+.hl-enter.hl-float {
+  animation: hl-float-in 0.9s var(--hl-ease) forwards,
+    hl-hover-float 6s ease-in-out infinite;
+  animation-delay: var(--hl-delay, 0s), calc(var(--hl-delay, 0s) + 0.9s);
+}
+
+@keyframes hl-hover-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+
+/* --------------------------------------------------------------------------
+   Sparkle / bokeh particle layer — tier 5 (positioning shell for the canvas)
+   -------------------------------------------------------------------------- */
+
+.hl-sparkles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* --------------------------------------------------------------------------
+   Chrome pedestal — tier 4 (CSS fallback for the 3D hero base)
+   -------------------------------------------------------------------------- */
+
+.hl-pedestal {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.hl-pedestal .hl-pedestal-disc {
+  border-radius: 50%;
+  background: linear-gradient(180deg, #f6fafe 0%, #c9d9ee 38%, #eef5fc 52%, #aec4e2 78%, #dfeaf7 100%);
+  box-shadow:
+    0 2px 4px rgba(255, 255, 255, 0.9) inset,
+    0 -3px 8px rgba(27, 42, 107, 0.18) inset,
+    0 18px 40px rgba(27, 42, 107, 0.22);
+}
+
+.hl-pedestal .hl-pedestal-core {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.95) 0%, rgba(37, 99, 235, 0.55) 45%, transparent 72%);
+  filter: blur(6px);
+  animation: hl-core-pulse 3s var(--hl-ease) infinite;
+}
+
+@keyframes hl-core-pulse {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.12); }
+}
+
+/* --------------------------------------------------------------------------
+   Decorative background layers — bokeh, rings, dot grid, light beam
+   -------------------------------------------------------------------------- */
+
+.hl-bokeh {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(30px);
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.28) 0%, rgba(37, 99, 235, 0.12) 50%, transparent 72%);
+}
+
+.hl-bokeh--warm {
+  background: radial-gradient(circle, rgba(253, 235, 221, 0.85) 0%, rgba(245, 158, 11, 0.1) 55%, transparent 75%);
+}
+
+.hl-ring-deco {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(37, 99, 235, 0.1);
+  pointer-events: none;
+}
+
+.hl-ring-deco--dashed {
+  border-style: dashed;
+  border-color: rgba(34, 211, 238, 0.22);
+}
+
+.hl-dotgrid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(37, 99, 235, 0.16) 1.4px, transparent 1.4px);
+  background-size: 36px 36px;
+  -webkit-mask-image: radial-gradient(70% 55% at 50% 45%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(70% 55% at 50% 45%, #000 0%, transparent 100%);
+}
+
+/* Volumetric light cone — place behind a hero object */
+.hl-beam {
+  position: absolute;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(34, 211, 238, 0.07) 55%, rgba(37, 99, 235, 0.13) 100%);
+  clip-path: polygon(42% 0%, 58% 0%, 100% 100%, 0% 100%);
+  filter: blur(14px);
+}
+
+/* --------------------------------------------------------------------------
+   Glossy 3D icon tile — app-icon style chip for module icons
+   -------------------------------------------------------------------------- */
+
+.hl-icon-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.4em;
+  height: 3.4em;
+  border-radius: 0.95em;
+  flex: none;
+  background: linear-gradient(150deg, #60a5fa 0%, #2563eb 55%, #1e40af 100%);
+  box-shadow:
+    0 10px 22px rgba(37, 99, 235, 0.4),
+    inset 0 2px 3px rgba(255, 255, 255, 0.65),
+    inset 0 -4px 8px rgba(27, 42, 107, 0.45);
+}
+
+.hl-icon-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(130% 90% at 26% 6%, rgba(255, 255, 255, 0.55) 0%, transparent 45%);
+}
+
+.hl-icon-tile svg {
+  position: relative;
+  z-index: 1;
+  width: 52%;
+  height: 52%;
+  stroke: #ffffff;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 2px rgba(27, 42, 107, 0.45));
+}
+
+.hl-icon-tile--cyan {
+  background: linear-gradient(150deg, #67e8f9 0%, #22d3ee 50%, #0891b2 100%);
+  box-shadow:
+    0 10px 22px rgba(34, 211, 238, 0.4),
+    inset 0 2px 3px rgba(255, 255, 255, 0.65),
+    inset 0 -4px 8px rgba(8, 145, 178, 0.5);
+}
+
+.hl-icon-tile--gold {
+  background: linear-gradient(150deg, #fcd34d 0%, #f59e0b 55%, #d97706 100%);
+  box-shadow:
+    0 10px 22px rgba(245, 158, 11, 0.4),
+    inset 0 2px 3px rgba(255, 255, 255, 0.65),
+    inset 0 -4px 8px rgba(180, 83, 9, 0.5);
+}
+
+.hl-icon-tile--navy {
+  background: linear-gradient(150deg, #3552a8 0%, #1b2a6b 60%, #111c4d 100%);
+  box-shadow:
+    0 10px 22px rgba(27, 42, 107, 0.4),
+    inset 0 2px 3px rgba(255, 255, 255, 0.4),
+    inset 0 -4px 8px rgba(10, 16, 45, 0.6);
+}
+
+/* --------------------------------------------------------------------------
+   Stat tile — compact metric on glass
+   -------------------------------------------------------------------------- */
+
+.hl-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2em;
+  padding: 1em 1.6em;
+  text-align: center;
+}
+
+.hl-stat .hl-stat-value {
+  font-family: var(--hl-font-display);
+  font-weight: 800;
+  font-size: 1.7em;
+  background: linear-gradient(120deg, var(--hl-primary), var(--hl-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.hl-stat .hl-stat-label {
+  font-family: var(--hl-font-display);
+  font-weight: 700;
+  font-size: 0.62em;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--hl-navy);
+  opacity: 0.75;
+}
+
+/* --------------------------------------------------------------------------
+   Orbit helpers — satellites circling a hero object
+   -------------------------------------------------------------------------- */
+
+.hl-orbit-plane {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.hl-orbiter {
+  position: absolute;
+  left: 0;
+  top: 0;
+  animation: hl-orbit var(--hl-orbit-t, 14s) linear infinite;
+  animation-delay: var(--hl-delay, 0s);
+}
+
+@keyframes hl-orbit {
+  from { transform: rotate(0deg) translateX(var(--hl-orbit-r, 160px)) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(var(--hl-orbit-r, 160px)) rotate(-360deg); }
+}
+
+.hl-satellite {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #ffffff 0%, var(--hl-secondary) 55%, var(--hl-primary) 100%);
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.9), 0 0 4px rgba(255, 255, 255, 0.9);
+}
+
+/* --------------------------------------------------------------------------
+   Extruded display headline — white bevel + cool extrusion + ambient glow
+   -------------------------------------------------------------------------- */
+
+.hl-display-3d {
+  filter: drop-shadow(0 1.5px 0 rgba(255, 255, 255, 0.95))
+    drop-shadow(0 4px 0 rgba(163, 191, 232, 0.6))
+    drop-shadow(0 16px 26px rgba(27, 42, 107, 0.3));
+}
+
+/* --------------------------------------------------------------------------
+   Freestanding 3D icon (gradient-filled SVG) — glow + grounded shadow
+   -------------------------------------------------------------------------- */
+
+.hl-icon3d {
+  flex: none;
+  filter: drop-shadow(0 3px 3px rgba(255, 255, 255, 0.6))
+    drop-shadow(0 12px 20px rgba(37, 99, 235, 0.38));
+}
+
+/* --------------------------------------------------------------------------
+   Floating validation pill — glass pill with a glossy circular badge
+   -------------------------------------------------------------------------- */
+
+.hl-pill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.45em 1.25em 0.45em 0.5em;
+  border-radius: 999px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(234, 245, 255, 0.78) 100%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 6px rgba(147, 197, 253, 0.4),
+    0 12px 26px rgba(37, 99, 235, 0.22);
+  font-family: var(--hl-font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--hl-navy);
+  white-space: nowrap;
+}
+
+.hl-pill-badge {
+  display: grid;
+  place-items: center;
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  flex: none;
+  background: linear-gradient(150deg, #67e8f9 0%, #22d3ee 45%, #2563eb 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(20, 32, 90, 0.4),
+    0 5px 12px rgba(37, 99, 235, 0.4);
+}
+
+.hl-pill-badge svg {
+  width: 58%;
+  height: 58%;
+  stroke: #ffffff;
+  fill: none;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hl-pill-badge--green {
+  background: linear-gradient(150deg, #6ee7b7 0%, #10b981 55%, #059669 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(4, 78, 56, 0.45),
+    0 5px 12px rgba(16, 185, 129, 0.4);
+}
+
+.hl-pill-badge--gold {
+  background: linear-gradient(150deg, #fcd34d 0%, #f59e0b 55%, #d97706 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(146, 64, 14, 0.45),
+    0 5px 12px rgba(245, 158, 11, 0.4);
+}
+
+.hl-pill-badge--violet {
+  background: linear-gradient(150deg, #c4b5fd 0%, #8b7cf6 55%, #7367f0 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 6px rgba(62, 48, 158, 0.45),
+    0 5px 12px rgba(115, 103, 240, 0.4);
+}
+
+/* Floating glass cube (rotated square) accent */
+.hl-cube {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 18%;
+  transform: rotate(45deg);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.85) 0%, rgba(147, 197, 253, 0.55) 55%, rgba(37, 99, 235, 0.45) 100%);
+  box-shadow:
+    0 12px 26px rgba(37, 99, 235, 0.28),
+    inset 0 2px 3px rgba(255, 255, 255, 0.9),
+    inset 0 -3px 6px rgba(37, 99, 235, 0.35);
+}
+
+/* Reduced motion — collapse the animation stack gracefully */
+@media (prefers-reduced-motion: reduce) {
+  .hl-gradient-text,
+  .hl-connector,
+  .hl-node,
+  .hl-float,
+  .hl-orbiter,
+  .hl-pedestal .hl-pedestal-core {
+    animation: none;
+  }
+  .hl-enter {
+    animation-duration: 0.01s;
+  }
+}

@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LixenAI — Social UI Kit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Inter:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../../styles.css" />
+    <style>
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      .page {
+        min-height: 100vh;
+      }
+
+      .page-inner {
+        position: relative;
+        z-index: 1;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 72px 32px 96px;
+      }
+
+      /* Header */
+      header.hero {
+        position: relative;
+        text-align: center;
+        margin-bottom: 72px;
+      }
+
+      header.hero .float-tile {
+        position: absolute;
+        z-index: 2;
+        animation: hl-hover-float 5.5s ease-in-out infinite;
+      }
+
+      @media (max-width: 900px) {
+        header.hero .float-tile { display: none; }
+      }
+
+      header.hero .hl-kicker {
+        display: block;
+        margin-bottom: 18px;
+      }
+
+      header.hero h1 {
+        font-size: clamp(2.6rem, 6.5vw, 4.6rem);
+      }
+
+      header.hero .hl-sub {
+        max-width: 620px;
+        margin: 22px auto 0;
+        font-size: 1.06rem;
+      }
+
+      header.hero .actions {
+        display: flex;
+        gap: 14px;
+        justify-content: center;
+        margin-top: 34px;
+        flex-wrap: wrap;
+      }
+
+      section + section {
+        margin-top: 84px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+      }
+
+      .section-head h2 {
+        font-size: clamp(1.4rem, 3vw, 2rem);
+      }
+
+      .section-head .hl-sub {
+        font-size: 0.92rem;
+      }
+
+      /* Template gallery — live scaled previews */
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 32px;
+      }
+
+      .template-card {
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        transition: transform 0.5s var(--hl-ease), box-shadow 0.5s var(--hl-ease);
+      }
+
+      .template-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 24px 48px rgba(37, 99, 235, 0.22), var(--hl-glass-underglow);
+      }
+
+      .preview {
+        position: relative;
+        width: 100%;
+        border-radius: 16px;
+        overflow: hidden;
+        background: var(--hl-bg-deep);
+        box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+      }
+
+      .preview.ratio-4x5 { aspect-ratio: 4 / 5; }
+      .preview.ratio-1x1 { aspect-ratio: 1 / 1; }
+
+      .preview iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1080px;
+        border: 0;
+        transform-origin: top left;
+        pointer-events: none;
+      }
+
+      .preview.ratio-4x5 iframe { height: 1350px; }
+      .preview.ratio-1x1 iframe { height: 1080px; }
+
+      .preview a.hit {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+      }
+
+      .template-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .template-meta .t-name {
+        font-family: var(--hl-font-display);
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--hl-navy);
+        font-size: 1rem;
+      }
+
+      .template-meta .t-desc {
+        font-size: 0.85rem;
+        margin-top: 4px;
+      }
+
+      /* Foundations — color tokens */
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 20px;
+      }
+
+      .swatch {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .swatch .chip-color {
+        height: 72px;
+        border-radius: 14px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 8px 18px rgba(27, 42, 107, 0.12);
+      }
+
+      .swatch .s-name {
+        font-family: var(--hl-font-display);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        color: var(--hl-navy);
+      }
+
+      .swatch .s-hex {
+        font-size: 0.78rem;
+        color: var(--hl-body);
+      }
+
+      /* Components row */
+      .components {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 28px;
+      }
+
+      .component-cell {
+        padding: 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .component-cell .c-title {
+        font-family: var(--hl-font-display);
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 0.82rem;
+        letter-spacing: 0.14em;
+        color: var(--hl-navy);
+      }
+
+      .component-cell .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .type-sample-display {
+        font-family: var(--hl-font-display);
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 1.6rem;
+        color: var(--hl-navy);
+        line-height: 1.1;
+      }
+
+      .type-sample-body {
+        font-size: 0.92rem;
+        line-height: 1.6;
+      }
+
+      footer {
+        margin-top: 96px;
+        text-align: center;
+      }
+
+      footer .brand {
+        font-family: var(--hl-font-display);
+        font-weight: 800;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--hl-navy);
+        font-size: 0.9rem;
+      }
+
+      footer .brand span { color: var(--hl-primary); }
+
+      footer .hl-sub {
+        font-size: 0.8rem;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page hl-canvas">
+      <div class="hl-dotgrid" style="height: 900px"></div>
+      <div class="hl-bokeh" style="width: 320px; height: 320px; left: -100px; top: 160px"></div>
+      <div class="hl-bokeh" style="width: 260px; height: 260px; right: -80px; top: 520px"></div>
+      <div class="hl-bokeh hl-bokeh--warm" style="width: 240px; height: 240px; right: -60px; top: -60px"></div>
+
+      <canvas class="hl-sparkles" id="sparkles"></canvas>
+
+      <div class="page-inner">
+        <header class="hero">
+          <div class="hl-icon-tile float-tile" style="left: 4%; top: 30px; font-size: 18px; transform: rotate(-8deg)">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="9" cy="10" r="1.8" /><path d="M3 17l5-4 4 3 4.5-4L21 16" /></svg>
+          </div>
+          <div class="hl-icon-tile hl-icon-tile--cyan float-tile" style="right: 5%; top: 60px; font-size: 15px; transform: rotate(9deg); animation-delay: 1.2s">
+            <svg viewBox="0 0 24 24"><path d="M21 3 3 10.5l6.5 2.6L12 20l3-5.5L21 3Z" /><path d="M9.5 13.1 21 3" /></svg>
+          </div>
+          <div class="hl-icon-tile hl-icon-tile--gold float-tile" style="left: 11%; top: 230px; font-size: 13px; transform: rotate(6deg); animation-delay: 2s">
+            <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" /></svg>
+          </div>
+          <div class="hl-cube float-tile" style="right: 12%; top: 250px; width: 30px; height: 30px; animation-delay: 0.6s"></div>
+
+          <span class="hl-kicker hl-enter" style="--hl-delay: 0s">LixenAI Design System</span>
+          <h1 class="hl-heading hl-display-3d hl-enter" style="--hl-delay: 0.06s">
+            Social <span class="hl-gradient-text">UI Kit</span>
+          </h1>
+          <p class="hl-sub hl-enter" style="--hl-delay: 0.12s">
+            Hologlass templates and components for LixenAI social graphics — frosted glass tiles,
+            3D heroes on chrome pedestals, glowing connector networks and sparkle layers, ready to remix.
+          </p>
+          <div class="actions hl-enter" style="--hl-delay: 0.18s">
+            <a class="hl-btn hl-btn--primary" href="ecosystem-slide.html">Ecosystem Slide</a>
+            <a class="hl-btn hl-btn--ghost" href="square-folder-hero.html">Folder Hero</a>
+          </div>
+        </header>
+
+        <!-- Templates -->
+        <section>
+          <div class="section-head hl-enter" style="--hl-delay: 0.22s">
+            <h2 class="hl-heading">Templates</h2>
+            <p class="hl-sub">Live previews — click to open full size.</p>
+          </div>
+          <div class="gallery">
+            <article class="template-card hl-glass hl-enter" style="--hl-delay: 0.28s">
+              <div class="preview ratio-4x5">
+                <iframe src="ecosystem-slide.html" title="Ecosystem slide preview" loading="lazy" scrolling="no" tabindex="-1"></iframe>
+                <a class="hit" href="ecosystem-slide.html" aria-label="Open ecosystem slide"></a>
+              </div>
+              <div class="template-meta">
+                <div>
+                  <div class="t-name">Ecosystem Slide</div>
+                  <p class="hl-sub t-desc">Hub-and-spoke infographic · 1080 × 1350</p>
+                </div>
+                <span class="hl-chip"><span class="hl-chip-dot"></span>4:5 Feed</span>
+              </div>
+            </article>
+
+            <article class="template-card hl-glass hl-enter" style="--hl-delay: 0.34s">
+              <div class="preview ratio-1x1">
+                <iframe src="square-folder-hero.html" title="Square folder hero preview" loading="lazy" scrolling="no" tabindex="-1"></iframe>
+                <a class="hit" href="square-folder-hero.html" aria-label="Open square folder hero"></a>
+              </div>
+              <div class="template-meta">
+                <div>
+                  <div class="t-name">Square Folder Hero</div>
+                  <p class="hl-sub t-desc">Glossy 3D hero object · 1080 × 1080</p>
+                </div>
+                <span class="hl-chip hl-chip--cyan"><span class="hl-chip-dot"></span>1:1 Square</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- Foundations -->
+        <section>
+          <div class="section-head hl-enter" style="--hl-delay: 0.1s">
+            <h2 class="hl-heading">Foundations</h2>
+            <p class="hl-sub">Core Hologlass color tokens.</p>
+          </div>
+          <div class="swatches">
+            <div class="swatch hl-glass hl-glass--tight hl-enter" style="--hl-delay: 0.14s">
+              <div class="chip-color" style="background: #f4f8fd"></div>
+              <div><div class="s-name">Ice Blue</div><div class="s-hex">#F4F8FD · background</div></div>
+            </div>
+            <div class="swatch hl-glass hl-glass--tight hl-enter" style="--hl-delay: 0.18s">
+              <div class="chip-color" style="background: #2563eb"></div>
+              <div><div class="s-name">Electric Blue</div><div class="s-hex">#2563EB · primary</div></div>
+            </div>
+            <div class="swatch hl-glass hl-glass--tight hl-enter" style="--hl-delay: 0.22s">
+              <div class="chip-color" style="background: #22d3ee"></div>
+              <div><div class="s-name">Cyan</div><div class="s-hex">#22D3EE · secondary</div></div>
+            </div>
+            <div class="swatch hl-glass hl-glass--tight hl-enter" style="--hl-delay: 0.26s">
+              <div class="chip-color" style="background: #1b2a6b"></div>
+              <div><div class="s-name">Headline Navy</div><div class="s-hex">#1B2A6B · headings</div></div>
+            </div>
+            <div class="swatch hl-glass hl-glass--tight hl-enter" style="--hl-delay: 0.3s">
+              <div class="chip-color" style="background: #f59e0b"></div>
+              <div><div class="s-name">Gold</div><div class="s-hex">#F59E0B · accent only</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Components -->
+        <section>
+          <div class="section-head hl-enter" style="--hl-delay: 0.1s">
+            <h2 class="hl-heading">Components</h2>
+            <p class="hl-sub">Building blocks used across the social templates.</p>
+          </div>
+          <div class="components">
+            <div class="component-cell hl-glass hl-enter" style="--hl-delay: 0.14s">
+              <div class="c-title">Typography</div>
+              <div class="type-sample-display">Bold Navy <span class="hl-gradient-text">Gradient</span></div>
+              <p class="type-sample-body">
+                Body copy is Inter 500 on ice blue — calm, legible and generous. Emphasis keywords
+                take the animated blue-to-cyan gradient fill.
+              </p>
+            </div>
+
+            <div class="component-cell hl-glass hl-enter" style="--hl-delay: 0.18s">
+              <div class="c-title">Badges &amp; Chips</div>
+              <div class="row">
+                <span class="hl-num-badge">1</span>
+                <span class="hl-num-badge">2</span>
+                <span class="hl-num-badge hl-num-badge--gold">3</span>
+              </div>
+              <div class="row">
+                <span class="hl-chip"><span class="hl-chip-dot"></span>AI Native</span>
+                <span class="hl-chip hl-chip--cyan"><span class="hl-chip-dot"></span>Live</span>
+              </div>
+              <div class="row">
+                <span class="hl-pill-label">
+                  <span class="hl-pill-badge hl-pill-badge--green"><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 7" /></svg></span>
+                  Brief Filed
+                </span>
+              </div>
+            </div>
+
+            <div class="component-cell hl-glass hl-enter" style="--hl-delay: 0.2s">
+              <div class="c-title">Glossy Icon Tiles</div>
+              <div class="row">
+                <span class="hl-icon-tile" style="font-size: 15px"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5" /><path d="M3 10h18M8 3v4M16 3v4" /></svg></span>
+                <span class="hl-icon-tile hl-icon-tile--cyan" style="font-size: 15px"><svg viewBox="0 0 24 24"><path d="M21 3 3 10.5l6.5 2.6L12 20l3-5.5L21 3Z" /><path d="M9.5 13.1 21 3" /></svg></span>
+                <span class="hl-icon-tile hl-icon-tile--navy" style="font-size: 15px"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="9" cy="10" r="1.8" /><path d="M3 17l5-4 4 3 4.5-4L21 16" /></svg></span>
+                <span class="hl-icon-tile hl-icon-tile--gold" style="font-size: 15px"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" /></svg></span>
+              </div>
+              <p class="type-sample-body">
+                App-icon style chips with specular highlight and colored under-shadow — the flat-icon
+                fallback for 3D renders.
+              </p>
+            </div>
+
+            <div class="component-cell hl-glass hl-enter" style="--hl-delay: 0.24s">
+              <div class="c-title">Stat Tiles</div>
+              <div class="row">
+                <div class="hl-stat hl-glass hl-glass--tight" style="font-size: 14px"><span class="hl-stat-value">10×</span><span class="hl-stat-label">Output</span></div>
+                <div class="hl-stat hl-glass hl-glass--tight" style="font-size: 14px"><span class="hl-stat-value">36+</span><span class="hl-stat-label">Brands</span></div>
+                <div class="hl-stat hl-glass hl-glass--tight" style="font-size: 14px"><span class="hl-stat-value">24/7</span><span class="hl-stat-label">On</span></div>
+              </div>
+              <p class="type-sample-body">
+                Gradient-filled metric numerals over frosted glass for proof points and outcome rows.
+              </p>
+            </div>
+
+            <div class="component-cell hl-glass hl-enter" style="--hl-delay: 0.22s">
+              <div class="c-title">Buttons</div>
+              <div class="row">
+                <button class="hl-btn hl-btn--primary" type="button">Primary</button>
+                <button class="hl-btn hl-btn--ghost" type="button">Ghost</button>
+              </div>
+              <p class="type-sample-body">
+                Pill silhouettes with gradient fill or frosted ghost treatment; hover lifts on the
+                signature ease curve.
+              </p>
+            </div>
+
+            <div class="component-cell hl-glass hl-enter" style="--hl-delay: 0.26s">
+              <div class="c-title">Connector Network</div>
+              <svg viewBox="0 0 240 90" width="100%" aria-hidden="true">
+                <defs>
+                  <linearGradient id="hl-connector-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.9" />
+                    <stop offset="50%" stop-color="#ffffff" stop-opacity="0.9" />
+                    <stop offset="100%" stop-color="#2563eb" stop-opacity="0.9" />
+                  </linearGradient>
+                </defs>
+                <path class="hl-connector" d="M 16 70 C 70 10, 170 10, 224 70" />
+                <circle class="hl-node" cx="16" cy="70" r="5" />
+                <circle class="hl-node" cx="120" cy="25" r="5" style="animation-delay: 0.6s" />
+                <circle class="hl-node" cx="224" cy="70" r="5" style="animation-delay: 1.2s" />
+              </svg>
+              <p class="type-sample-body">
+                Dash-flow bezier links with pulsing node dots tie glass tiles back to the hero.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <footer class="hl-enter" style="--hl-delay: 0.2s">
+          <div class="brand">Lixen<span>.AI</span></div>
+          <p class="hl-sub">Hologlass Social UI Kit · light theme only · gold is an accent, never a fill</p>
+        </footer>
+      </div>
+    </div>
+
+    <script>
+      // Scale template iframes to their preview containers
+      (function () {
+        function fit() {
+          document.querySelectorAll(".preview").forEach(function (p) {
+            var f = p.querySelector("iframe");
+            if (f) f.style.transform = "scale(" + p.clientWidth / 1080 + ")";
+          });
+        }
+        addEventListener("resize", fit);
+        addEventListener("load", fit);
+        fit();
+      })();
+
+      // Sparkle / bokeh particle layer
+      (function () {
+        var c = document.getElementById("sparkles");
+        var ctx = c.getContext("2d");
+        var ps = [];
+        function size() {
+          c.width = c.offsetWidth;
+          c.height = c.offsetHeight;
+          ps = [];
+          for (var i = 0; i < 55; i++) {
+            ps.push({
+              x: Math.random() * c.width,
+              y: Math.random() * c.height,
+              r: 0.8 + Math.random() * 2.4,
+              p: Math.random() * Math.PI * 2,
+              s: 0.4 + Math.random() * 1.2,
+              hue: Math.random() > 0.5 ? "180" : "220",
+            });
+          }
+        }
+        addEventListener("resize", size);
+        size();
+        var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        function draw(t) {
+          ctx.clearRect(0, 0, c.width, c.height);
+          ctx.globalCompositeOperation = "lighter";
+          for (var i = 0; i < ps.length; i++) {
+            var p = ps[i];
+            var a = 0.25 + 0.75 * Math.abs(Math.sin(p.p + t * 0.001 * p.s));
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = "hsla(" + p.hue + ", 90%, 70%, " + a * 0.6 + ")";
+            ctx.shadowColor = "hsla(" + p.hue + ", 90%, 70%, 0.9)";
+            ctx.shadowBlur = 8;
+            ctx.fill();
+          }
+          if (!reduced) requestAnimationFrame(draw);
+        }
+        requestAnimationFrame(draw);
+      })();
+    </script>
+  </body>
+</html>
