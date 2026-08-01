@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LixenAI — AI Content Ecosystem Slide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Inter:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../../styles.css" />
+    <style>
+      /* 1080×1350 (4:5) fixed canvas, scaled to fit the viewport */
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        background: var(--hl-bg-deep);
+        display: grid;
+        place-items: center;
+      }
+
+      .slide-scaler {
+        position: fixed;
+        top: 0;
+        left: 0;
+        transform-origin: top left;
+      }
+
+      .slide {
+        width: 1080px;
+        height: 1350px;
+        border-radius: 0;
+      }
+
+      .slide-inner {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        padding: 84px 72px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .slide .hl-kicker {
+        font-size: 20px;
+        margin-bottom: 22px;
+      }
+
+      .slide h1 {
+        font-size: 76px;
+        text-align: center;
+        max-width: 900px;
+      }
+
+      .slide .hl-sub {
+        font-size: 25px;
+        text-align: center;
+        max-width: 700px;
+        margin-top: 24px;
+      }
+
+      /* Hub-and-spoke stage */
+      .stage {
+        position: relative;
+        width: 100%;
+        flex: 1;
+        margin-top: 30px;
+      }
+
+      .stage svg.network {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+      }
+
+      /* Central hero — holographic orb on chrome pedestal */
+      .hero {
+        position: absolute;
+        left: 50%;
+        top: 47%;
+        transform: translate(-50%, -50%);
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .orb {
+        position: relative;
+        width: 250px;
+        height: 250px;
+      }
+
+      .orb .orb-glow {
+        position: absolute;
+        inset: -70px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(34, 211, 238, 0.35) 0%, rgba(37, 99, 235, 0.18) 45%, transparent 70%);
+        filter: blur(14px);
+      }
+
+      .orb .orb-body {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 34%),
+          radial-gradient(circle at 50% 55%, rgba(34, 211, 238, 0.55) 0%, rgba(37, 99, 235, 0.85) 68%, #1b2a6b 100%);
+        box-shadow:
+          0 30px 60px rgba(37, 99, 235, 0.4),
+          inset 0 -18px 40px rgba(27, 42, 107, 0.55),
+          inset 0 10px 24px rgba(255, 255, 255, 0.5);
+      }
+
+      .orb svg.orb-wire {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        animation: orb-spin 26s linear infinite;
+      }
+
+      @keyframes orb-spin {
+        to { transform: rotate(360deg); }
+      }
+
+      .orb .orb-ring {
+        position: absolute;
+        inset: -28px;
+        border-radius: 50%;
+        border: 1.5px dashed rgba(34, 211, 238, 0.7);
+        animation: orb-spin 18s linear infinite reverse;
+      }
+
+      .hero .hl-pedestal {
+        margin-top: -26px;
+      }
+
+      .hero .hl-pedestal-disc.d1 { width: 300px; height: 56px; }
+      .hero .hl-pedestal-disc.d2 { width: 224px; height: 42px; margin-top: -34px; }
+      .hero .hl-pedestal-core { width: 150px; height: 44px; bottom: 12px; }
+
+      /* Orbiting glass modules */
+      .module {
+        position: absolute;
+        z-index: 2;
+        width: 300px;
+        padding: 26px 28px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .module .hl-num-badge {
+        font-size: 21px;
+        flex: none;
+      }
+
+      .module .m-label {
+        font-family: var(--hl-font-display);
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 22px;
+        color: var(--hl-navy);
+        line-height: 1.15;
+      }
+
+      .module .m-note {
+        font-size: 16.5px;
+        margin-top: 5px;
+        color: var(--hl-body);
+      }
+
+      .m1 { left: 0;   top: 4%; }
+      .m2 { right: 0;  top: 4%; }
+      .m3 { left: 0;   top: 40%; }
+      .m4 { right: 0;  top: 40%; }
+      .m5 { left: 3%;  bottom: 2%; }
+      .m6 { right: 3%; bottom: 2%; }
+
+      .footer-chips {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        margin-top: 14px;
+      }
+
+      .footer-chips .hl-chip { font-size: 17px; }
+
+      .brand {
+        margin-top: 26px;
+        font-family: var(--hl-font-display);
+        font-weight: 800;
+        letter-spacing: 0.26em;
+        font-size: 19px;
+        color: var(--hl-navy);
+        text-transform: uppercase;
+      }
+
+      .brand span { color: var(--hl-primary); }
+    </style>
+  </head>
+  <body>
+    <div class="slide-scaler" id="scaler">
+      <main class="slide hl-canvas">
+        <canvas class="hl-sparkles" id="sparkles"></canvas>
+
+        <div class="slide-inner">
+          <div class="hl-kicker hl-enter" style="--hl-delay: 0s">LixenAI Ecosystem</div>
+          <h1 class="hl-heading hl-enter" style="--hl-delay: 0.06s">
+            One Brain.<br />Every <span class="hl-gradient-text">Channel.</span>
+          </h1>
+          <p class="hl-sub hl-enter" style="--hl-delay: 0.12s">
+            The AI content engine that plans, writes, designs and publishes — everywhere at once.
+          </p>
+
+          <div class="stage">
+            <!-- Tier 2: connector network -->
+            <svg class="network" viewBox="0 0 936 640" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="hl-connector-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.9" />
+                  <stop offset="50%" stop-color="#ffffff" stop-opacity="0.9" />
+                  <stop offset="100%" stop-color="#2563eb" stop-opacity="0.9" />
+                </linearGradient>
+              </defs>
+              <path class="hl-connector" d="M 300 70 C 380 120, 420 190, 468 260" />
+              <path class="hl-connector" d="M 636 70 C 556 120, 516 190, 468 260" />
+              <path class="hl-connector" d="M 300 300 C 360 300, 400 300, 448 300" />
+              <path class="hl-connector" d="M 636 300 C 576 300, 536 300, 488 300" />
+              <path class="hl-connector" d="M 320 560 C 390 500, 430 420, 468 340" />
+              <path class="hl-connector" d="M 616 560 C 546 500, 506 420, 468 340" />
+              <circle class="hl-node" cx="300" cy="70" r="6" />
+              <circle class="hl-node" cx="636" cy="70" r="6" style="animation-delay: 0.4s" />
+              <circle class="hl-node" cx="300" cy="300" r="6" style="animation-delay: 0.8s" />
+              <circle class="hl-node" cx="636" cy="300" r="6" style="animation-delay: 1.2s" />
+              <circle class="hl-node" cx="320" cy="560" r="6" style="animation-delay: 1.6s" />
+              <circle class="hl-node" cx="616" cy="560" r="6" style="animation-delay: 2s" />
+            </svg>
+
+            <!-- Tier 4: 3D hero on chrome pedestal -->
+            <div class="hero hl-enter" style="--hl-delay: 0.18s">
+              <div class="orb hl-float">
+                <div class="orb-glow"></div>
+                <div class="orb-body"></div>
+                <svg class="orb-wire" viewBox="0 0 100 100" aria-hidden="true">
+                  <g fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="0.7">
+                    <ellipse cx="50" cy="50" rx="46" ry="18" />
+                    <ellipse cx="50" cy="50" rx="46" ry="32" />
+                    <ellipse cx="50" cy="50" rx="18" ry="46" />
+                    <ellipse cx="50" cy="50" rx="32" ry="46" />
+                    <circle cx="50" cy="50" r="46" />
+                  </g>
+                </svg>
+                <div class="orb-ring"></div>
+              </div>
+              <div class="hl-pedestal">
+                <div class="hl-pedestal-disc d1"></div>
+                <div class="hl-pedestal-disc d2"></div>
+                <div class="hl-pedestal-core"></div>
+              </div>
+            </div>
+
+            <!-- Tier 3: orbiting glass modules (staggered radially outward) -->
+            <div class="module hl-glass hl-glass--tight hl-enter m1" style="--hl-delay: 0.26s">
+              <span class="hl-num-badge">1</span>
+              <div>
+                <div class="m-label">Plan</div>
+                <div class="m-note">Campaign calendar</div>
+              </div>
+            </div>
+            <div class="module hl-glass hl-glass--tight hl-enter m2" style="--hl-delay: 0.32s">
+              <span class="hl-num-badge">2</span>
+              <div>
+                <div class="m-label">Write</div>
+                <div class="m-note">On-brand copy</div>
+              </div>
+            </div>
+            <div class="module hl-glass hl-glass--tight hl-enter m3" style="--hl-delay: 0.38s">
+              <span class="hl-num-badge">3</span>
+              <div>
+                <div class="m-label">Design</div>
+                <div class="m-note">Visuals & video</div>
+              </div>
+            </div>
+            <div class="module hl-glass hl-glass--tight hl-enter m4" style="--hl-delay: 0.44s">
+              <span class="hl-num-badge">4</span>
+              <div>
+                <div class="m-label">Schedule</div>
+                <div class="m-note">Best-time queue</div>
+              </div>
+            </div>
+            <div class="module hl-glass hl-glass--tight hl-enter m5" style="--hl-delay: 0.5s">
+              <span class="hl-num-badge">5</span>
+              <div>
+                <div class="m-label">Publish</div>
+                <div class="m-note">Every platform</div>
+              </div>
+            </div>
+            <div class="module hl-glass hl-glass--tight hl-enter m6" style="--hl-delay: 0.56s">
+              <span class="hl-num-badge hl-num-badge--gold">6</span>
+              <div>
+                <div class="m-label">Grow</div>
+                <div class="m-note">Analytics loop</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-chips hl-enter" style="--hl-delay: 0.64s">
+            <span class="hl-chip"><span class="hl-chip-dot"></span>AI Native</span>
+            <span class="hl-chip hl-chip--cyan"><span class="hl-chip-dot"></span>Multi-Brand</span>
+            <span class="hl-chip"><span class="hl-chip-dot"></span>Auto-Publish</span>
+          </div>
+          <div class="brand hl-enter" style="--hl-delay: 0.7s">Lixen<span>.AI</span></div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // Scale the fixed 1080×1350 canvas to fit the viewport
+      (function () {
+        var scaler = document.getElementById("scaler");
+        function fit() {
+          var s = Math.min(innerWidth / 1080, innerHeight / 1350);
+          var x = (innerWidth - 1080 * s) / 2;
+          var y = (innerHeight - 1350 * s) / 2;
+          scaler.style.transform = "translate(" + x + "px," + y + "px) scale(" + s + ")";
+        }
+        addEventListener("resize", fit);
+        fit();
+      })();
+
+      // Tier 5: sparkle / bokeh particle layer (additive twinkle)
+      (function () {
+        var c = document.getElementById("sparkles");
+        var ctx = c.getContext("2d");
+        var W = (c.width = 1080);
+        var H = (c.height = 1350);
+        var ps = [];
+        for (var i = 0; i < 60; i++) {
+          ps.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            r: 0.8 + Math.random() * 2.6,
+            p: Math.random() * Math.PI * 2,
+            s: 0.4 + Math.random() * 1.2,
+            hue: Math.random() > 0.5 ? "180" : "220",
+          });
+        }
+        var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        function draw(t) {
+          ctx.clearRect(0, 0, W, H);
+          ctx.globalCompositeOperation = "lighter";
+          for (var i = 0; i < ps.length; i++) {
+            var p = ps[i];
+            var a = 0.25 + 0.75 * Math.abs(Math.sin(p.p + t * 0.001 * p.s));
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = "hsla(" + p.hue + ", 90%, 70%, " + a * 0.7 + ")";
+            ctx.shadowColor = "hsla(" + p.hue + ", 90%, 70%, 0.9)";
+            ctx.shadowBlur = 8;
+            ctx.fill();
+          }
+          if (!reduced) requestAnimationFrame(draw);
+        }
+        requestAnimationFrame(draw);
+      })();
+    </script>
+  </body>
+</html>
