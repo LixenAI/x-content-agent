@@ -189,7 +189,11 @@ async function veoVideo(opts: VideoOpts): Promise<string> {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  // Hosting platforms (Render, Heroku, Fly, …) assign the port via PORT and
+  // route traffic to it. Hardcoding 3000 leaves the platform to sniff the
+  // listening port instead, which is racy and strands deploys in a health-check
+  // loop when it doesn't converge. Fall back to 3000 for local dev.
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Credentialed same-origin requests only: the session cookie must not be
   // readable by arbitrary origins, and the SPA is served from this same origin.
