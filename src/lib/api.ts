@@ -1,5 +1,5 @@
 import type {
-  AspectRatio, Brand, BrandProfileDraft, Campaign, CaptionVariant, GhlSocialAccount,
+  AspectRatio, Brand, BrandProfileDraft, Campaign, CaptionVariant, ChatMessage, GhlSocialAccount,
   MetaIgAccount, MetaStatus, Platform, Post, PostFormat, ProviderStatus, ViralityReport,
 } from '../types';
 import { BROLL_CATEGORIES, frameworksPromptBlock, HOOK_FORMULAS, PLATFORM_MATRIX } from './frameworks';
@@ -48,6 +48,11 @@ export async function logout(): Promise<void> {
 
 export async function getProviders(): Promise<ProviderStatus> {
   return request<ProviderStatus>('/api/providers');
+}
+
+export async function chatWithAgent(messages: ChatMessage[]): Promise<string> {
+  const { reply } = await post<{ reply: string }>('/api/agent/chat', { messages });
+  return reply;
 }
 
 export async function getMetaStatus(): Promise<MetaStatus> {

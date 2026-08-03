@@ -11,6 +11,7 @@ import { Dashboard } from './components/panels/Dashboard';
 import { Brands } from './components/panels/Brands';
 import { Campaigns, CampaignWizard } from './components/panels/Campaigns';
 import { Planner } from './components/panels/Planner';
+import { Assistant } from './components/panels/Assistant';
 import { Analytics } from './components/panels/Analytics';
 import { Integrations } from './components/panels/Integrations';
 import { Settings } from './components/panels/Settings';
@@ -27,6 +28,7 @@ function AppShell() {
       case 'brands': return <Brands />;
       case 'campaigns': return <Campaigns onNavigate={setActiveTab} />;
       case 'planner': return <Planner onOpenPost={setOpenPostId} />;
+      case 'assistant': return <Assistant />;
       case 'analytics': return <Analytics />;
       case 'integrations': return <Integrations />;
       case 'settings': return <Settings />;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BarChart3, Building2, CalendarDays, ChevronDown, FlaskConical, LayoutDashboard, LogOut, Megaphone, Plug, Settings, Check } from 'lucide-react';
+import { BarChart3, Building2, CalendarDays, ChevronDown, FlaskConical, LayoutDashboard, LogOut, Megaphone, MessageSquare, Plug, Settings, Check } from 'lucide-react';
 import type { Tab } from '../types';
 import * as api from '../lib/api';
 import { useApp } from '../state/AppContext';
@@ -103,6 +103,7 @@ export function Sidebar({ activeTab, onTabChange }: { activeTab: Tab; onTabChang
         <SectionLabel>Content</SectionLabel>
         <NavItem icon={<Megaphone size={17} />} label="Campaigns" tab="campaigns" activeTab={activeTab} onClick={onTabChange} />
         <NavItem icon={<CalendarDays size={17} />} label="Social Planner" tab="planner" activeTab={activeTab} onClick={onTabChange} />
+        <NavItem icon={<MessageSquare size={17} />} label="AI Assistant" tab="assistant" activeTab={activeTab} onClick={onTabChange} />
         <NavItem icon={<BarChart3 size={17} />} label="Analytics" tab="analytics" activeTab={activeTab} onClick={onTabChange} />
 
         <SectionLabel>Setup</SectionLabel>

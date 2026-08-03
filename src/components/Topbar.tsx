@@ -8,6 +8,7 @@ const TITLES: Record<Tab, string> = {
   brands: 'Brands',
   campaigns: 'Campaigns',
   planner: 'Social Planner',
+  assistant: 'AI Assistant',
   analytics: 'Analytics',
   integrations: 'Integrations',
   settings: 'Settings',
