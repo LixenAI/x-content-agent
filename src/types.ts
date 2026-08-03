@@ -3,7 +3,12 @@ export type PostStatus = 'draft' | 'scheduled' | 'posted';
 export type PostFormat = 'post' | 'carousel' | 'video';
 export type MediaStatus = 'none' | 'generating' | 'done' | 'failed';
 export type AspectRatio = '1:1' | '9:16' | '16:9';
-export type Tab = 'dashboard' | 'brands' | 'campaigns' | 'planner' | 'analytics' | 'integrations' | 'settings';
+export type Tab = 'dashboard' | 'brands' | 'campaigns' | 'planner' | 'assistant' | 'analytics' | 'integrations' | 'settings';
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 export interface SocialAccount {
   id: string;
@@ -37,6 +42,7 @@ export interface Brand {
   createdAt: string;
   socialAccounts: SocialAccount[];    // per-brand social connections
   ghlSubAccounts?: GhlSubAccount[];   // per-brand GoHighLevel sub-accounts
+  logoUrl?: string;                   // data URL, stamped onto every generated image as a watermark
 }
 
 export interface FormatMix {
@@ -139,6 +145,7 @@ export interface BrandProfileDraft {
   audience: string;
   topics: string[];
   colors: string[];
+  logoUrl?: string;
 }
 
 export interface ProviderStatus {

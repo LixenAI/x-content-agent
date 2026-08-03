@@ -7,9 +7,14 @@ services:
     runtime: node
     plan: starter
     autoDeploy: true
-    buildCommand: npm ci && npm run build
+    # --include=dev is required: NODE_ENV=production (below) makes npm omit
+    # devDependencies, and the build needs esbuild from there to bundle the
+    # server. Without it the build dies on "esbuild: not found".
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node dist/server.mjs
-    healthCheckPath: /api/providers
+    # /api/providers now sits behind the login gate; /api/health is the
+    # unauthenticated liveness probe.
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -38,6 +43,16 @@ services:
       - key: META_APP_SECRET
         sync: false
       - key: CANVA_TEMPLATE_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Password for the login gate. REQUIRED: with this unset the app refuses
+      # to serve protected routes in production rather than running open.
+      - key: APP_PASSWORD
+        sync: false
+      # Optional. Signs session cookies. Left unset, one is generated and kept
+      # on the persistent disk, which is fine for a single instance.
+      - key: SESSION_SECRET
         sync: false
     disk:
       name: content-pro-data

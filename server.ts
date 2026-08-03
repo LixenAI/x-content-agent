@@ -6,8 +6,12 @@ import crypto from "node:crypto";
 import { attachMedia, db, splitMedia } from "./src/db";
 import { exchangeCode, listIgAccounts, loginUrl, metaConfigured, publishToInstagram, type MetaConnectionRecord } from "./src/meta";
 import { createPlannerPost, ghlConfigured, listSocialAccounts as listGhlAccounts } from "./src/ghl";
+import { authConfigured, isAuthed, login, logout, requireAuth } from "./src/auth";
 
+// .env.local (documented in README as the local-dev file) takes precedence
+// over .env; load .env first so .env.local's values win on overlap.
 dotenv.config();
+dotenv.config({ path: ".env.local", override: true });
 
 const hasGeminiKey = () => !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY";
 const hasKlingKeys = () => !!process.env.KLING_ACCESS_KEY && !!process.env.KLING_SECRET_KEY;
@@ -185,10 +189,46 @@ async function veoVideo(opts: VideoOpts): Promise<string> {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  // Hosting platforms (Render, Heroku, Fly, …) assign the port via PORT and
+  // route traffic to it. Hardcoding 3000 leaves the platform to sniff the
+  // listening port instead, which is racy and strands deploys in a health-check
+  // loop when it doesn't converge. Fall back to 3000 for local dev.
+  const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(cors());
-  app.use(express.json());
+  // Credentialed same-origin requests only: the session cookie must not be
+  // readable by arbitrary origins, and the SPA is served from this same origin.
+  app.use(cors({ origin: true, credentials: true }));
+  // Posts/carousels/brands carry base64 image data URLs (generated images,
+  // watermark-composited PNGs, uploaded logos) well past Express's 100kb
+  // default — raise the limit so those PUTs don't 413.
+  app.use(express.json({ limit: "25mb" }));
+
+  // ---------- Auth (must be registered before the gate below) ----------
+
+  // Unauthenticated liveness probe for the platform health check. Deliberately
+  // says nothing about configuration — /api/providers is behind the gate.
+  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+  app.get("/api/auth/status", (req, res) => {
+    res.json({ authConfigured: authConfigured(), authenticated: authConfigured() ? isAuthed(req) : true });
+  });
+
+  app.post("/api/auth/login", (req, res) => {
+    if (!authConfigured()) return res.status(400).json({ error: "Login is not configured on this server." });
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!login(res, password)) return res.status(401).json({ error: "Incorrect password." });
+    res.json({ ok: true });
+  });
+
+  app.post("/api/auth/logout", (_req, res) => {
+    logout(res);
+    res.json({ ok: true });
+  });
+
+  // Everything below /api requires a session. Registered here so every route
+  // defined later inherits it by default — new endpoints are protected unless
+  // someone deliberately mounts them above this line.
+  app.use("/api", requireAuth);
 
   // API Route for Gemini Text
   app.post("/api/generate-text", async (req, res) => {
@@ -205,7 +245,7 @@ async function startServer() {
       const ai = new GoogleGenAI({ apiKey });
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-flash-latest",
         contents: prompt,
       });
 
@@ -291,7 +331,7 @@ async function startServer() {
       const ai = new GoogleGenAI({ apiKey });
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-flash-latest",
         contents: `Analyze this website content and extract a brand profile for social media marketing.
 
 ${siteSummary}
@@ -322,6 +362,125 @@ Return a JSON object with exactly these fields:
         } catch(e) {}
       }
       res.status(500).json({ error: `Website analysis failed: ${errorMsg}` });
+    }
+  });
+
+  // ---------- In-app assistant ----------
+  //
+  // Read-only by design. The assistant is given a summary of the workspace so
+  // it can answer grounded questions and help write copy, but it has no tools
+  // and no write path: it cannot create, schedule, publish, or delete anything.
+  // Any change still goes through the user in the UI.
+
+  // Compact snapshot of the workspace for grounding. Image data URLs are
+  // stripped — a single carousel would otherwise blow past the context window.
+  function buildWorkspaceContext(): string {
+    const d = db();
+    const brands = d.prepare("SELECT data FROM brands").all().map((r: any) => JSON.parse(r.data));
+    const campaigns = d.prepare("SELECT data FROM campaigns").all().map((r: any) => JSON.parse(r.data));
+    const posts = d.prepare("SELECT data FROM posts ORDER BY created_at DESC").all().map((r: any) => JSON.parse(r.data));
+
+    const lines: string[] = [];
+    lines.push(`BRANDS (${brands.length}):`);
+    for (const b of brands) {
+      lines.push(`- ${b.name} — ${b.website || "no website"}`);
+      if (b.description) lines.push(`  about: ${b.description}`);
+      if (b.toneOfVoice) lines.push(`  voice: ${b.toneOfVoice}`);
+      if (b.audience) lines.push(`  audience: ${b.audience}`);
+      if (b.topics?.length) lines.push(`  topics: ${b.topics.join(", ")}`);
+      const accounts = (b.socialAccounts ?? []).map((a: any) =>
+        `${a.platform}${a.ghlAccountId ? " (GHL)" : a.igUserId ? " (live)" : " (simulated)"}`);
+      lines.push(`  accounts: ${accounts.length ? accounts.join(", ") : "none connected"}`);
+    }
+
+    lines.push(`\nCAMPAIGNS (${campaigns.length}):`);
+    for (const c of campaigns) {
+      lines.push(`- ${c.name} [${c.status}] goal: ${c.goal || "n/a"}; platforms: ${(c.platforms ?? []).join(", ")}`);
+    }
+
+    const byStatus = posts.reduce((acc: Record<string, number>, p: any) => {
+      acc[p.status] = (acc[p.status] ?? 0) + 1;
+      return acc;
+    }, {});
+    lines.push(`\nPOSTS (${posts.length} total — ${Object.entries(byStatus).map(([k, v]) => `${v} ${k}`).join(", ") || "none"}):`);
+    for (const p of posts.slice(0, 25)) {
+      const caption = (p.caption ?? "").replace(/\s+/g, " ").slice(0, 160);
+      lines.push(`- [${p.status}] ${p.platform}/${p.format} @ ${p.scheduledAt}: "${caption}"`);
+      if (p.format === "carousel" && p.slides?.length) {
+        lines.push(`  slides: ${p.slides.map((s: any) => s.heading).filter(Boolean).join(" | ")}`);
+      }
+    }
+    if (posts.length > 25) lines.push(`  …and ${posts.length - 25} older posts not listed.`);
+    return lines.join("\n");
+  }
+
+  app.post("/api/agent/chat", async (req, res) => {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ error: "Set ANTHROPIC_API_KEY to enable the assistant." });
+    }
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages : null;
+    if (!messages?.length) return res.status(400).json({ error: "messages is required." });
+
+    // Only role/content survives — never trust the client to shape the payload
+    // sent upstream, and cap history so a long chat can't grow unbounded.
+    const clean = messages
+      .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m.content === "string" && m.content.trim())
+      .slice(-24)
+      .map((m: any) => ({ role: m.role, content: m.content.slice(0, 8000) }));
+    if (!clean.length) return res.status(400).json({ error: "No valid messages." });
+
+    let workspace = "";
+    try {
+      workspace = buildWorkspaceContext();
+    } catch (err: any) {
+      console.error("Assistant context build failed:", err.message);
+      workspace = "(workspace context unavailable)";
+    }
+
+    const system = `You are the in-app assistant for Content Pro Agent, an AI social content studio.
+
+You help the operator plan, write, and review social content. Be concise and concrete — this is a working tool, not a chat toy. Prefer specific, usable output (actual captions, actual hooks) over generic advice. Use plain language; skip corporate filler.
+
+You can SEE the workspace below, but you CANNOT change anything: you have no ability to create, edit, schedule, publish, or delete posts, and no access to connected social accounts. If the user asks you to post, schedule, or publish something, tell them plainly that you can't, and point them to the relevant screen (Social Planner to schedule and approve, Campaigns to generate content, Integrations to connect accounts). Never imply an action has been taken.
+
+When you don't know something or it isn't in the workspace data, say so rather than guessing. Never invent metrics, dates, or results.
+
+CURRENT WORKSPACE
+${workspace}`;
+
+    try {
+      const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-5",
+          max_tokens: 1500,
+          system,
+          messages: clean,
+        }),
+      });
+      if (!upstream.ok) {
+        const text = await upstream.text();
+        console.error("Assistant upstream error:", text.slice(0, 400));
+        let msg = "The assistant is unavailable right now.";
+        try { msg = JSON.parse(text).error?.message || msg; } catch { /* keep default */ }
+        return res.status(upstream.status).json({ error: msg });
+      }
+      const data = await upstream.json();
+      const reply = (data.content ?? [])
+        .filter((b: any) => b.type === "text")
+        .map((b: any) => b.text)
+        .join("")
+        .trim();
+      res.json({ reply: reply || "(no response)" });
+    } catch (err: any) {
+      console.error("Assistant error:", err.message);
+      res.status(502).json({ error: "Could not reach the assistant." });
     }
   });
 

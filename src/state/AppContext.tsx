@@ -10,6 +10,7 @@ import {
   demoVariants, demoVirality, placeholderImage,
 } from '../lib/demo';
 import { PLATFORM_MATRIX, resolveVideoStyle, VIDEO_STYLES } from '../lib/frameworks';
+import { applyWatermark } from '../lib/watermark';
 
 const DEFAULT_SETTINGS: AgencySettings = {
   agencyName: 'Content Pro Agent',
@@ -94,6 +95,12 @@ export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
+}
+
+// Stamps the brand's logo onto a freshly generated image when one is set;
+// no-op (and safe) otherwise.
+function stampImage(imageUrl: string, brand: Brand | undefined): Promise<string> {
+  return brand?.logoUrl ? applyWatermark(imageUrl, brand.logoUrl) : Promise.resolve(imageUrl);
 }
 
 function computeCounts(total: number, mix: FormatMix): { post: number; carousel: number; video: number } {
@@ -398,30 +405,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const generatePostImage = useCallback(async (postId: string) => {
     const post = postsRef.current.find(p => p.id === postId);
     if (!post) return;
+    const brand = brands.find(b => b.id === post.brandId);
     updatePost(postId, { imageStatus: 'generating' });
     try {
-      const imageUrl = await api.generateImage(post.imagePrompt, PLATFORM_MATRIX[post.platform].imageAspect);
+      let imageUrl = await api.generateImage(post.imagePrompt, PLATFORM_MATRIX[post.platform].imageAspect);
+      imageUrl = await stampImage(imageUrl, brand);
       updatePost(postId, { imageUrl, imageStatus: 'done' });
     } catch {
       updatePost(postId, { imageStatus: 'failed' });
       enterDemoMode('Image generation unavailable — keeping placeholder');
     }
-  }, [updatePost, enterDemoMode]);
+  }, [brands, updatePost, enterDemoMode]);
 
   const generateSlideImage = useCallback(async (postId: string, slideIndex: number) => {
     const post = postsRef.current.find(p => p.id === postId);
     const slide = post?.slides?.[slideIndex];
     if (!post || !slide) return;
+    const brand = brands.find(b => b.id === post.brandId);
     patchSlide(postId, slideIndex, { imageStatus: 'generating' });
     try {
-      const imageUrl = await api.generateImage(slide.imagePrompt, '1:1');
+      let imageUrl = await api.generateImage(slide.imagePrompt, '1:1');
+      imageUrl = await stampImage(imageUrl, brand);
       patchSlide(postId, slideIndex, { imageUrl, imageStatus: 'done' });
       if (slideIndex === 0) updatePost(postId, { imageUrl }); // cover doubles as thumbnail
     } catch {
       patchSlide(postId, slideIndex, { imageStatus: 'failed' });
       enterDemoMode('Image generation unavailable — keeping placeholder');
     }
-  }, [patchSlide, updatePost, enterDemoMode]);
+  }, [brands, patchSlide, updatePost, enterDemoMode]);
 
   const generateVideoKeyframe = useCallback(async (postId: string) => {
     const post = postsRef.current.find(p => p.id === postId);
@@ -429,7 +440,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!post?.video || !brand) return;
     const scene = post.video.scenes[0];
     try {
-      const keyframeUrl = await api.generateImage(scene?.imagePrompt ?? post.imagePrompt, post.video.aspectRatio);
+      let keyframeUrl = await api.generateImage(scene?.imagePrompt ?? post.imagePrompt, post.video.aspectRatio);
+      keyframeUrl = await stampImage(keyframeUrl, brand);
       patchVideo(postId, { keyframeUrl, videoStatus: post.video.videoUrl ? post.video.videoStatus : 'keyframe' });
       updatePost(postId, { imageUrl: keyframeUrl });
     } catch {
@@ -448,6 +460,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!keyframeUrl) {
       try {
         keyframeUrl = await api.generateImage(post.video.scenes[0]?.imagePrompt ?? post.imagePrompt, post.video.aspectRatio);
+        keyframeUrl = await stampImage(keyframeUrl, brand);
         patchVideo(postId, { keyframeUrl });
       } catch {
         keyframeUrl = null;
@@ -543,15 +556,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const tasks = batch.map(p => async () => {
       try {
         if (p.format === 'carousel' && p.slides?.length) {
-          const imageUrl = await api.generateImage(p.slides[0].imagePrompt, '1:1');
+          let imageUrl = await api.generateImage(p.slides[0].imagePrompt, '1:1');
+          imageUrl = await stampImage(imageUrl, brand);
           patchSlide(p.id, 0, { imageUrl, imageStatus: 'done' });
           updatePost(p.id, { imageUrl, imageStatus: 'done' });
         } else if (p.format === 'video' && p.video) {
-          const keyframeUrl = await api.generateImage(p.video.scenes[0]?.imagePrompt ?? p.imagePrompt, p.video.aspectRatio);
+          let keyframeUrl = await api.generateImage(p.video.scenes[0]?.imagePrompt ?? p.imagePrompt, p.video.aspectRatio);
+          keyframeUrl = await stampImage(keyframeUrl, brand);
           patchVideo(p.id, { keyframeUrl, videoStatus: 'keyframe' });
           updatePost(p.id, { imageUrl: keyframeUrl, imageStatus: 'done' });
         } else {
-          const imageUrl = await api.generateImage(p.imagePrompt, PLATFORM_MATRIX[p.platform].imageAspect);
+          let imageUrl = await api.generateImage(p.imagePrompt, PLATFORM_MATRIX[p.platform].imageAspect);
+          imageUrl = await stampImage(imageUrl, brand);
           updatePost(p.id, { imageUrl, imageStatus: 'done' });
         }
       } catch {

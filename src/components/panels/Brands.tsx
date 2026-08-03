@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Building2, Globe, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Building2, Globe, Pencil, Plus, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import type { Brand, BrandProfileDraft } from '../../types';
 import { useApp } from '../../state/AppContext';
 import { EmptyState, Modal, PlatformIcon, PrimaryButton } from '../shared';
@@ -38,6 +38,54 @@ function TopicChips({ topics, onChange }: { topics: string[]; onChange: (topics:
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
         placeholder="Add a topic and press Enter"
         className="w-full px-3 py-2 rounded-xl border border-bb-border text-sm focus:outline-none focus:border-bb-primary bg-white"
+      />
+    </div>
+  );
+}
+
+function LogoUpload({ logoUrl, onChange }: { logoUrl?: string; onChange: (dataUrl: string | undefined) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-14 h-14 rounded-xl border border-dashed border-bb-border bg-white flex items-center justify-center overflow-hidden shrink-0">
+        {logoUrl ? (
+          <img src={logoUrl} alt="Brand logo" className="w-full h-full object-contain p-1" />
+        ) : (
+          <Upload size={16} className="text-bb-muted" />
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="px-3 py-1.5 rounded-lg border border-bb-border text-xs font-semibold text-bb-muted hover:text-bb-primary hover:border-bb-primary transition-colors"
+        >
+          {logoUrl ? 'Replace logo' : 'Upload logo'}
+        </button>
+        {logoUrl && (
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-bb-muted hover:text-bb-error transition-colors"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        className="hidden"
+        onChange={e => handleFile(e.target.files?.[0])}
       />
     </div>
   );
@@ -184,6 +232,9 @@ export function BrandWizard({ editBrand, onClose }: { editBrand: Brand | null; o
                 </button>
               )}
             </div>
+          </Field>
+          <Field label="Brand logo (watermarked onto every generated image)">
+            <LogoUpload logoUrl={draft.logoUrl} onChange={logoUrl => setDraft({ ...draft, logoUrl })} />
           </Field>
           <Field label="Deep knowledge (optional)">
             <textarea

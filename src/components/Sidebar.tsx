@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { BarChart3, Building2, CalendarDays, ChevronDown, FlaskConical, LayoutDashboard, Megaphone, Plug, Settings, Check } from 'lucide-react';
+import { BarChart3, Building2, CalendarDays, ChevronDown, FlaskConical, LayoutDashboard, LogOut, Megaphone, MessageSquare, Plug, Settings, Check } from 'lucide-react';
 import type { Tab } from '../types';
+import * as api from '../lib/api';
 import { useApp } from '../state/AppContext';
 
 interface NavItemProps {
@@ -102,6 +103,7 @@ export function Sidebar({ activeTab, onTabChange }: { activeTab: Tab; onTabChang
         <SectionLabel>Content</SectionLabel>
         <NavItem icon={<Megaphone size={17} />} label="Campaigns" tab="campaigns" activeTab={activeTab} onClick={onTabChange} />
         <NavItem icon={<CalendarDays size={17} />} label="Social Planner" tab="planner" activeTab={activeTab} onClick={onTabChange} />
+        <NavItem icon={<MessageSquare size={17} />} label="AI Assistant" tab="assistant" activeTab={activeTab} onClick={onTabChange} />
         <NavItem icon={<BarChart3 size={17} />} label="Analytics" tab="analytics" activeTab={activeTab} onClick={onTabChange} />
 
         <SectionLabel>Setup</SectionLabel>
@@ -109,7 +111,7 @@ export function Sidebar({ activeTab, onTabChange }: { activeTab: Tab; onTabChang
         <NavItem icon={<Settings size={17} />} label="Settings" tab="settings" activeTab={activeTab} onClick={onTabChange} />
       </nav>
 
-      <div className="px-5 py-4 border-t border-white/10">
+      <div className="px-5 py-4 border-t border-white/10 flex items-center justify-between gap-2">
         {demoMode ? (
           <div className="flex items-center gap-2 text-xs text-amber-300/90">
             <FlaskConical size={13} />
@@ -121,6 +123,13 @@ export function Sidebar({ activeTab, onTabChange }: { activeTab: Tab; onTabChang
             Content engine online
           </div>
         )}
+        <button
+          onClick={async () => { await api.logout().catch(() => {}); window.location.reload(); }}
+          title="Sign out"
+          className="shrink-0 p-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/10 transition-colors"
+        >
+          <LogOut size={14} />
+        </button>
       </div>
     </aside>
   );
